@@ -53,14 +53,20 @@ enter real tokens into the demo website or commit pairing state.
 MuseVita does not accept a Muse password, browser cookie, or invented token. Use
 the official Gadget SDK flow on a supported BLE host to pair the Vita identity,
 then stop the host's gadget service so only one device registration is active.
-Copy the matching `identity.json`, `pairing.json`, and `sdk_token` to
-`ux0:data/MuseVita/` with VitaShell. The token file is the official Gadget SDK
-token file, not a browser cookie or Muse password. On first launch MuseVita
-imports the official access and refresh tokens plus SDK token into
-`credentials.bin`, removes the plaintext bundle, and uses direct Wi-Fi
-thereafter. The Vita does not currently perform the BLE peripheral pairing
-step itself; the one-time BLE pairing must be completed by a supported host
-using the same identity before these files are moved to the Vita.
+For the phone flow, run the repository helper on the supported pairing host to
+create one `musevita-pairing.json` bundle. The bundle contains the official
+pairing state and SDK token for that user-owned device; it is not a password,
+browser cookie, or public download. The Vita's QR page downloads the Vita's
+non-secret identity automatically, so the phone only needs that one bundle.
+The phone encrypts it locally before transfer. On receipt MuseVita imports the
+official access and refresh tokens plus SDK token into `credentials.bin` and
+removes the plaintext import data.
+
+If using VitaShell instead of the QR flow, the helper can still create the
+legacy directory containing `identity.json`, `pairing.json`, and `sdk_token`.
+The Vita does not currently perform the BLE peripheral pairing step itself; the
+one-time BLE pairing must be completed by a supported host using the same
+identity before the bundle is made.
 
 When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
 with a phone on the same network. The page downloads the Vita's non-secret
