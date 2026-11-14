@@ -49,16 +49,32 @@ static int copy_json_string(const char *json, size_t size, size_t *offset,
 
 int muse_json_find_string(const char *json, size_t json_size, const char *key,
                           char *output, size_t output_capacity) {
+    return muse_json_find_string_range(json, json_size, 0, json_size, key,
+                                       output, output_capacity, NULL, NULL);
+}
+
+int muse_json_find_string_range(const char *json, size_t json_size,
+                                size_t start_offset, size_t end_offset,
+                                const char *key, char *output,
+                                size_t output_capacity, size_t *key_offset,
+                                size_t *next_offset) {
     size_t key_size;
-    if (json == NULL || key == NULL || output == NULL || output_capacity == 0) return 0;
+    if (json == NULL || key == NULL || output == NULL || output_capacity == 0 ||
+        start_offset > json_size) return 0;
+    if (end_offset > json_size) end_offset = json_size;
+    if (start_offset >= end_offset) return 0;
     key_size = strlen(key);
-    for (size_t i = 0; i + key_size + 2 < json_size; i++) {
+    for (size_t i = start_offset; i + key_size + 2 < end_offset; i++) {
         size_t value_offset;
         if (!key_at(json, json_size, i, key, key_size)) continue;
-        value_offset = skip_space(json, json_size, i + key_size + 2);
-        if (value_offset >= json_size || json[value_offset] != ':') continue;
-        value_offset = skip_space(json, json_size, value_offset + 1);
-        if (copy_json_string(json, json_size, &value_offset, output, output_capacity)) return 1;
+        value_offset = skip_space(json, end_offset, i + key_size + 2);
+        if (value_offset >= end_offset || json[value_offset] != ':') continue;
+        value_offset = skip_space(json, end_offset, value_offset + 1);
+        if (copy_json_string(json, end_offset, &value_offset, output, output_capacity)) {
+            if (key_offset != NULL) *key_offset = i;
+            if (next_offset != NULL) *next_offset = value_offset;
+            return 1;
+        }
     }
     return 0;
 }

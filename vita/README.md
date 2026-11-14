@@ -38,8 +38,9 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 
 - On-device BLE pairing and QR scanning are not implemented on the Vita itself;
   the official three-file pairing import and phone-assisted encrypted transfer
-  are implemented. Historical chat pagination is not exposed by the current
-  official gadget client, so the UI keeps bounded in-memory history;
+  are implemented. The app requests a bounded recent history page after the
+  live subscription opens, then continues with live events; older-page
+  pagination is not implemented;
   camera/microphone capture still needs
   physical Vita testing with an authenticated Muse account. Transport
   reconnect retries after a bounded delay when the imported credentials remain

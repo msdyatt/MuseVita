@@ -56,6 +56,8 @@ typedef struct MuseVitaSession {
     bool request_active;
     bool request_done;
     bool request_failed;
+    bool request_is_history;
+    bool history_requested;
     char active_assistant_id[128];
     char last_user_id[128];
     char register_request_id[40];

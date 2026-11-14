@@ -17,6 +17,15 @@ int main(void) {
     assert(strcmp(value, "delta.text_append") == 0);
     assert(muse_json_find_string(json, strlen(json), "text", value, sizeof(value)));
     assert(strcmp(value, "hello\nworld") == 0);
+    {
+        size_t key_offset = 0;
+        size_t next_offset = 0;
+        assert(muse_json_find_string_range(json, strlen(json), 0, strlen(json),
+                                           "vm_id", value, sizeof(value),
+                                           &key_offset, &next_offset));
+        assert(strcmp(value, "vm-1") == 0);
+        assert(next_offset > key_offset);
+    }
     assert(muse_json_find_bool(json, strlen(json), "default", &boolean) && boolean == 1);
     assert(muse_json_has_key(json, strlen(json), "payload"));
     assert(!muse_json_has_key(json, strlen(json), "error"));

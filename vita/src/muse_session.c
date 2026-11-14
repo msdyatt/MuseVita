@@ -24,6 +24,7 @@
 #define PING_INTERVAL_US (20u * 1000u * 1000u)
 #define RETRY_DELAY_US (10u * 1000u * 1000u)
 #define MAX_HTTP_JSON_BYTES (64u * 1024u)
+#define MAX_CONTROL_OUTBOUND_MESSAGE_BYTES (256u * 1024u)
 #define CREDENTIAL_MAGIC "MVC1"
 #define CREDENTIAL_PLAINTEXT_BYTES 4096u
 
@@ -118,6 +119,8 @@ static void close_transport(MuseVitaSession *session) {
     session->request_active = false;
     session->request_done = false;
     session->request_failed = false;
+    session->request_is_history = false;
+    session->history_requested = false;
 }
 
 static void set_transport_error(MuseVitaSession *session) {
@@ -592,7 +595,7 @@ static int send_control_json(MuseVitaSession *session, const char *message, size
     uint8_t framed[CONTROL_BODY_CHUNK_BYTES];
     size_t framed_offset = 0;
     size_t total_size;
-    if (session == NULL || message == NULL || message_size > MUSE_CONTROL_MAX_MESSAGE_BYTES ||
+    if (session == NULL || message == NULL || message_size > MAX_CONTROL_OUTBOUND_MESSAGE_BYTES ||
         message_size > SIZE_MAX - sizeof(uint32_t)) return -1;
     total_size = sizeof(uint32_t) + message_size;
     framed[0] = (uint8_t)(message_size & 0xffu);
@@ -657,6 +660,7 @@ static void begin_request(MuseVitaSession *session, int64_t stream_id) {
     session->request_active = true;
     session->request_done = false;
     session->request_failed = false;
+    session->request_is_history = false;
 }
 
 static void finish_request(MuseVitaSession *session, int failed) {
@@ -860,6 +864,112 @@ static void consume_request_bytes(MuseVitaSession *session, const uint8_t *bytes
     if (end_body) finish_request(session, 0);
 }
 
+static MuseVitaChatRole history_role(const char *role) {
+    if (strcmp(role, "user") == 0 || strcmp(role, "human") == 0) {
+        return MUSEVITA_CHAT_USER;
+    }
+    return MUSEVITA_CHAT_ASSISTANT;
+}
+
+static int history_role_is_supported(const char *role) {
+    return strcmp(role, "user") == 0 || strcmp(role, "human") == 0 ||
+           strcmp(role, "assistant") == 0 || strcmp(role, "agent") == 0 ||
+           strcmp(role, "muse") == 0;
+}
+
+static void consume_history_response(MuseVitaSession *session) {
+    size_t cursor = 0;
+    unsigned int added = 0;
+    while (cursor < session->request_buffer_size &&
+           added < MUSEVITA_CHAT_MAX_MESSAGES) {
+        char role[32];
+        char next_role[32];
+        char text[MUSEVITA_CHAT_MAX_TEXT];
+        size_t role_key = 0;
+        size_t role_end = 0;
+        size_t next_role_key = 0;
+        size_t next_role_end = 0;
+        size_t member_end = session->request_buffer_size;
+        int found_text = 0;
+        if (!muse_json_find_string_range(session->request_buffer,
+                                         session->request_buffer_size, cursor,
+                                         session->request_buffer_size, "role", role,
+                                         sizeof(role), &role_key, &role_end)) break;
+        if (muse_json_find_string_range(session->request_buffer,
+                                        session->request_buffer_size, role_end,
+                                        session->request_buffer_size, "role", next_role,
+                                        sizeof(next_role), &next_role_key, &next_role_end)) {
+            member_end = next_role_key;
+        }
+        if (history_role_is_supported(role)) {
+            found_text = muse_json_find_string_range(session->request_buffer,
+                                                     session->request_buffer_size,
+                                                     role_end, member_end,
+                                                     "display_text", text, sizeof(text),
+                                                     NULL, NULL) ||
+                         muse_json_find_string_range(session->request_buffer,
+                                                     session->request_buffer_size,
+                                                     role_end, member_end,
+                                                     "content", text, sizeof(text),
+                                                     NULL, NULL) ||
+                         muse_json_find_string_range(session->request_buffer,
+                                                     session->request_buffer_size,
+                                                     role_end, member_end,
+                                                     "transcript", text, sizeof(text),
+                                                     NULL, NULL) ||
+                         muse_json_find_string_range(session->request_buffer,
+                                                     session->request_buffer_size,
+                                                     role_end, member_end,
+                                                     "text", text, sizeof(text),
+                                                     NULL, NULL);
+            if (found_text && text[0] != '\0') {
+                muse_vita_chat_add_message(session->chat, history_role(role), text);
+                added++;
+            }
+        }
+        cursor = next_role_key != 0 ? next_role_key : session->request_buffer_size;
+    }
+}
+
+static int start_history_request(MuseVitaSession *session) {
+    const MuseLinkHeader headers[] = {
+        {"Accept", "application/json"},
+        {"x-app-id", "musegadget"},
+    };
+    size_t encoded_size = 0;
+    int64_t stream_id;
+    if (session == NULL || session->request_active || !session->subscribed) return -1;
+    session->history_requested = true;
+    stream_id = session->next_stream_id++;
+    begin_request(session, stream_id);
+    session->request_is_history = true;
+    if (muse_link_encode_http_request(stream_id, "GET", "/chat/history?limit=4",
+                                      headers, sizeof(headers) / sizeof(headers[0]),
+                                      NULL, 0, 1, session->frame_buffer,
+                                      sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
+        send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
+        session->request_active = false;
+        session->request_done = false;
+        session->request_is_history = false;
+        return -1;
+    }
+    return 0;
+}
+
+static void finish_history_request(MuseVitaSession *session) {
+    if (session == NULL || !session->request_active || !session->request_is_history ||
+        !session->request_done) return;
+    if (!session->request_failed && session->request_status >= 200 &&
+        session->request_status < 300 && session->chat != NULL) {
+        consume_history_response(session);
+    }
+    session->request_active = false;
+    session->request_done = false;
+    session->request_failed = false;
+    session->request_is_history = false;
+    session->request_buffer_size = 0;
+}
+
 static int process_service_response(MuseVitaSession *session, const uint8_t *payload, size_t payload_size) {
     MuseLinkIncoming incoming;
     if (muse_link_decode_service_response(payload, payload_size, &incoming) != MUSE_LINK_WIRE_OK) return -1;
@@ -957,6 +1067,9 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     if (session == NULL || chat == NULL ||
         (session->state != MUSEVITA_SESSION_READY && session->state != MUSEVITA_SESSION_ERROR)) return -1;
     session->chat = chat;
+    /* Preserve the in-memory transcript across reconnects. On a fresh app
+       start, request a small recent page after the live subscription opens. */
+    session->history_requested = chat->message_count != 0;
     session->state = MUSEVITA_SESSION_CONNECTING;
     {
         int fetch_result = fetch_vm(session);
@@ -1040,11 +1153,15 @@ int muse_vita_session_poll(MuseVitaSession *session) {
             set_transport_error(session);
             return -1;
         }
-        if (result == 0) return 0;
+        if (result == 0) break;
         if (process_websocket_message(session, session->ws_message, message_size) != 0) {
             set_transport_error(session);
             return -1;
         }
+    }
+    finish_history_request(session);
+    if (session->subscribed && !session->history_requested && !session->request_active) {
+        (void)start_history_request(session);
     }
     return 0;
 }

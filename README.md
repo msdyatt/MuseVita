@@ -41,7 +41,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
 | Muse device discovery and unpair handling | Implemented: structured `device.guide`, capability metadata, and local credential retirement on `link.unpaired`/`node.unpaired`; live validation pending |
 | Native chat view, bounded history, and Vita IME composer | Implemented and connected to streamed transport events |
-| Direct chat send/subscribe and streamed replies | Implemented in the native source; account/hardware validation pending |
+| Direct chat history/send/subscribe and streamed replies | Implemented in the native source with a bounded initial history page; account/hardware validation pending |
 | Native photo and voice-note capture | Implemented as bounded Vita camera/JPEG and microphone/WAV send paths; physical capture validation pending |
 | Vita hardware installation/playability | Not tested in this environment |
 
@@ -125,8 +125,9 @@ commit, currently reviewed at `f2c702b123e97f4fecdaefb29ded17bb03fab0b0`:
    the implemented exact Noise XX initiator, and verify it against SDK vectors
    while rejecting malformed/low-order inputs.
 4. Send the protobuf service envelope over `/link-control`, register the Vita
-   as a gadget, then use `/chat/stream` and `/chat/subscribe` for text turns and
-   NDJSON events. Never keep a second live control session for the same identity.
+   as a gadget, then use `/chat/history` for a bounded initial transcript,
+   `/chat/stream` for text turns, and `/chat/subscribe` for NDJSON events.
+   Never keep a second live control session for the same identity.
 
 The implementation must be fixture-tested before any real credential is used.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
