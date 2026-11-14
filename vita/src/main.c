@@ -26,6 +26,7 @@
 #define WARNING RGBA8(240, 184, 100, 255)
 #define SUCCESS RGBA8(111, 214, 160, 255)
 #define MUSEVITA_PGF_BASE_SIZE 32.0f
+#define MUSEVITA_PGF_MIN_SCALE 0.78f
 
 enum {
     PAGE_STATUS = 0,
@@ -36,7 +37,9 @@ enum {
 
 static void text(vita2d_pgf *font, int x, int y, float size, uint32_t color, const char *value) {
     /* vita2d PGF takes a scale multiplier, not a pixel size. */
-    vita2d_pgf_draw_text(font, x, y, color, size / MUSEVITA_PGF_BASE_SIZE, value);
+    float scale = size / MUSEVITA_PGF_BASE_SIZE;
+    if (scale < MUSEVITA_PGF_MIN_SCALE) scale = MUSEVITA_PGF_MIN_SCALE;
+    vita2d_pgf_draw_text(font, x, y, color, scale, value);
 }
 
 static void draw_header(vita2d_pgf *font, MuseVitaNetworkState network) {
@@ -57,13 +60,13 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network) {
 }
 
 static void draw_setup_page(vita2d_pgf *font) {
-    text(font, 70, 192, 29, WHITE, "One-time setup");
-    text(font, 70, 233, 19, WHITE, "1. Connect the Vita to Wi-Fi");
-    text(font, 70, 270, 19, WHITE, "2. Approve Muse Gadget pairing");
-    text(font, 70, 307, 19, WHITE, "3. Redeem a short-lived QR session");
-    text(font, 70, 344, 19, MUTED, "QR data must never contain account tokens.");
+    text(font, 70, 192, 29, WHITE, "One-time Muse setup");
+    text(font, 70, 233, 19, WHITE, "1. Pair this Vita in the Muse mobile app");
+    text(font, 70, 270, 19, WHITE, "2. Approve gadget provisioning");
+    text(font, 70, 307, 19, WHITE, "3. Use direct Wi-Fi after setup");
+    text(font, 70, 344, 19, MUTED, "Bluetooth is needed only during setup.");
     vita2d_draw_rectangle(70, 370, 820, 44, BORDER);
-    text(font, 93, 399, 18, WARNING, "Pairing transport is not active in this build.");
+    text(font, 93, 399, 18, WARNING, "Pairing transport is not active yet.");
 }
 
 static void draw_chat_page(vita2d_pgf *font) {
