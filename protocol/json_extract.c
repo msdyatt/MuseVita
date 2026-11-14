@@ -113,3 +113,178 @@ int muse_json_has_key(const char *json, size_t json_size, const char *key) {
     }
     return 0;
 }
+
+static size_t json_string_end(const char *json, size_t size, size_t offset) {
+    int escaped = 0;
+    if (offset >= size || json[offset] != '"') return 0;
+    for (offset++; offset < size; offset++) {
+        unsigned char c = (unsigned char)json[offset];
+        if (escaped) {
+            escaped = 0;
+        } else if (c == '\\') {
+            escaped = 1;
+        } else if (c == '"') {
+            return offset + 1;
+        }
+    }
+    return 0;
+}
+
+static size_t json_value_start(const char *json, size_t size, size_t start,
+                               size_t end, const char *key) {
+    size_t key_size = strlen(key);
+    for (size_t i = start; i + key_size + 2 < end; i++) {
+        size_t value;
+        if (!key_at(json, size, i, key, key_size)) continue;
+        value = skip_space(json, end, i + key_size + 2);
+        if (value < end && json[value] == ':') {
+            value = skip_space(json, end, value + 1);
+            if (value < end) return value;
+        }
+    }
+    return 0;
+}
+
+static size_t json_container_end(const char *json, size_t size, size_t offset,
+                                 char opening, char closing) {
+    size_t depth = 0;
+    int in_string = 0;
+    int escaped = 0;
+    if (offset >= size || json[offset] != opening) return 0;
+    for (size_t i = offset; i < size; i++) {
+        unsigned char c = (unsigned char)json[i];
+        if (in_string) {
+            if (escaped) escaped = 0;
+            else if (c == '\\') escaped = 1;
+            else if (c == '"') in_string = 0;
+            continue;
+        }
+        if (c == '"') {
+            in_string = 1;
+        } else if (c == opening) {
+            depth++;
+        } else if (c == closing) {
+            if (--depth == 0) return i + 1;
+        }
+    }
+    return 0;
+}
+
+static int append_json_text(const char *json, size_t size, size_t start,
+                            size_t end, char *output, size_t capacity,
+                            int *has_text) {
+    char text[512];
+    size_t text_size;
+    if (!muse_json_find_string_range(json, size, start, end, "text", text,
+                                     sizeof(text), NULL, NULL) || text[0] == '\0') {
+        return 0;
+    }
+    text_size = strlen(text);
+    if (*has_text) {
+        if (strlen(output) + 1 >= capacity) return 0;
+        strcat(output, "\n");
+    }
+    if (strlen(output) + text_size + 1 > capacity) return 0;
+    strcat(output, text);
+    *has_text = 1;
+    return 1;
+}
+
+static int append_text_items(const char *json, size_t size, size_t array_start,
+                             size_t array_end, char *output, size_t capacity,
+                             int *has_text) {
+    size_t cursor = array_start + 1;
+    while (cursor + 1 < array_end) {
+        size_t item_end;
+        cursor = skip_space(json, array_end - 1, cursor);
+        if (cursor >= array_end - 1 || json[cursor] == ']') break;
+        if (json[cursor] == '{') {
+            item_end = json_container_end(json, array_end, cursor, '{', '}');
+            if (item_end == 0 || item_end > array_end) return 0;
+            append_json_text(json, size, cursor, item_end, output, capacity, has_text);
+            cursor = item_end;
+        } else if (json[cursor] == '"') {
+            item_end = json_string_end(json, array_end, cursor);
+            if (item_end == 0) return 0;
+            cursor = item_end;
+        } else {
+            cursor++;
+        }
+        cursor = skip_space(json, array_end - 1, cursor);
+        if (cursor < array_end - 1 && json[cursor] == ',') cursor++;
+    }
+    return *has_text;
+}
+
+static int append_assistant_messages(const char *json, size_t size,
+                                     size_t messages_start, size_t messages_end,
+                                     char *output, size_t capacity, int *has_text) {
+    size_t cursor = messages_start + 1;
+    while (cursor + 1 < messages_end) {
+        size_t message_end;
+        char role[32];
+        cursor = skip_space(json, messages_end - 1, cursor);
+        if (cursor >= messages_end - 1 || json[cursor] == ']') break;
+        if (json[cursor] != '{') {
+            cursor++;
+            continue;
+        }
+        message_end = json_container_end(json, messages_end, cursor, '{', '}');
+        if (message_end == 0 || message_end > messages_end) return 0;
+        if (muse_json_find_string_range(json, size, cursor, message_end, "role",
+                                        role, sizeof(role), NULL, NULL) &&
+            strcmp(role, "assistant") == 0) {
+            size_t content = json_value_start(json, size, cursor, message_end, "content");
+            if (content < message_end && json[content] == '[') {
+                size_t content_end = json_container_end(json, message_end, content, '[', ']');
+                if (content_end == 0 || !append_text_items(json, size, content,
+                                                           content_end, output,
+                                                           capacity, has_text)) {
+                    return 0;
+                }
+            }
+        }
+        cursor = message_end;
+        cursor = skip_space(json, messages_end - 1, cursor);
+        if (cursor < messages_end - 1 && json[cursor] == ',') cursor++;
+    }
+    return *has_text;
+}
+
+int muse_json_find_assistant_text(const char *json, size_t json_size,
+                                  char *output, size_t output_capacity) {
+    size_t cursor = 0;
+    int has_text = 0;
+    if (json == NULL || output == NULL || output_capacity == 0) return 0;
+    output[0] = '\0';
+    while (cursor < json_size) {
+        size_t object_start = json_value_start(json, json_size, cursor, json_size, "transcript");
+        if (object_start == 0) break;
+        if (json[object_start] == '{') {
+            size_t object_end = json_container_end(json, json_size, object_start, '{', '}');
+            size_t messages = object_end == 0 ? 0 : json_value_start(json, json_size,
+                                                                       object_start,
+                                                                       object_end,
+                                                                       "messages");
+            if (messages != 0 && json[messages] == '[') {
+                size_t messages_end = json_container_end(json, object_end, messages, '[', ']');
+                if (messages_end != 0) {
+                    append_assistant_messages(json, json_size, messages, messages_end,
+                                              output, output_capacity, &has_text);
+                }
+            }
+        }
+        cursor = object_start + 1;
+    }
+    if (has_text) return 1;
+
+    cursor = json_value_start(json, json_size, 0, json_size, "content");
+    if (cursor < json_size && json[cursor] == '[') {
+        size_t content_end = json_container_end(json, json_size, cursor, '[', ']');
+        if (content_end != 0) {
+            append_text_items(json, json_size, cursor, content_end, output,
+                              output_capacity, &has_text);
+        }
+    }
+    return has_text;
+}

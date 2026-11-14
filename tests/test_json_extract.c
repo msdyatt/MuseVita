@@ -29,5 +29,23 @@ int main(void) {
     assert(muse_json_find_bool(json, strlen(json), "default", &boolean) && boolean == 1);
     assert(muse_json_has_key(json, strlen(json), "payload"));
     assert(!muse_json_has_key(json, strlen(json), "error"));
+    {
+        const char structured[] =
+            "{\"event\":\"message.assistant\",\"transcript\":{"
+            "\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"ignore\"}]},"
+            "{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"first\"},"
+            "{\"type\":\"text\",\"text\":\"second\"}]}]}}";
+        assert(muse_json_find_assistant_text(structured, strlen(structured),
+                                             value, sizeof(value)));
+        assert(strcmp(value, "first\nsecond") == 0);
+    }
+    {
+        const char structured[] =
+            "{\"event\":\"message.assistant\",\"content\":["
+            "{\"type\":\"text\",\"text\":\"direct\"}]}";
+        assert(muse_json_find_assistant_text(structured, strlen(structured),
+                                             value, sizeof(value)));
+        assert(strcmp(value, "direct") == 0);
+    }
     return 0;
 }

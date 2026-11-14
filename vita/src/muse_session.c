@@ -826,7 +826,9 @@ static void consume_chat_line(MuseVitaSession *session, const char *line, size_t
         if ((muse_json_find_string(line, line_size, "display_text", text, sizeof(text)) ||
              muse_json_find_string(line, line_size, "transcript", text, sizeof(text)) ||
              muse_json_find_string(line, line_size, "content", text, sizeof(text)) ||
-             muse_json_find_string(line, line_size, "text", text, sizeof(text))) && text[0] != '\0') {
+             muse_json_find_assistant_text(line, line_size, text, sizeof(text)) ||
+             muse_json_find_string(line, line_size, "text", text, sizeof(text))) &&
+            text[0] != '\0') {
             muse_vita_chat_replace_last_assistant(session->chat, text);
         }
     }
