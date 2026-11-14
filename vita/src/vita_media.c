@@ -35,6 +35,7 @@ int muse_vita_capture_photo_jpeg(uint8_t *output, size_t capacity, size_t *outpu
     int camera_open = 0;
     int camera_started = 0;
     int result = -1;
+    int encoder_context_size;
     SceCameraInfo camera_info;
     SceCameraRead camera_read;
     int encoded_size;
@@ -73,7 +74,9 @@ int muse_vita_capture_photo_jpeg(uint8_t *output, size_t capacity, size_t *outpu
     camera_read.mode = 0;
     if (sceCameraRead(SCE_CAMERA_DEVICE_BACK, &camera_read) < 0) goto cleanup;
 
-    encoder_memory = malloc((size_t)sceJpegEncoderGetContextSize());
+    encoder_context_size = sceJpegEncoderGetContextSize();
+    if (encoder_context_size <= 0) goto cleanup;
+    encoder_memory = malloc((size_t)encoder_context_size);
     if (encoder_memory == NULL) goto cleanup;
     encoder = encoder_memory;
     if (sceJpegEncoderInit(encoder, PHOTO_WIDTH, PHOTO_HEIGHT,
