@@ -209,6 +209,65 @@ static size_t json_container_end(const char *json, size_t size, size_t offset,
     return 0;
 }
 
+static int json_find_bool_range(const char *json, size_t json_size,
+                                size_t start_offset, size_t end_offset,
+                                const char *key, int *value) {
+    size_t key_size;
+    if (json == NULL || key == NULL || value == NULL || start_offset > json_size) return 0;
+    if (end_offset > json_size) end_offset = json_size;
+    if (start_offset >= end_offset) return 0;
+    key_size = strlen(key);
+    for (size_t i = start_offset; i + key_size + 2 < end_offset; i++) {
+        size_t value_offset;
+        if (!key_at(json, json_size, i, key, key_size)) continue;
+        value_offset = skip_space(json, end_offset, i + key_size + 2);
+        if (value_offset >= end_offset || json[value_offset] != ':') continue;
+        value_offset = skip_space(json, end_offset, value_offset + 1);
+        if (value_offset + 4 <= end_offset && memcmp(json + value_offset, "true", 4) == 0) {
+            *value = 1;
+            return 1;
+        }
+        if (value_offset + 5 <= end_offset && memcmp(json + value_offset, "false", 5) == 0) {
+            *value = 0;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+int muse_json_find_array_object_range(const char *json, size_t json_size,
+                                      const char *array_key, const char *match_key,
+                                      int match_value, size_t *object_start,
+                                      size_t *object_end) {
+    size_t array_start;
+    size_t array_end;
+    size_t cursor;
+    if (json == NULL || array_key == NULL || object_start == NULL || object_end == NULL) return 0;
+    array_start = json_value_start(json, json_size, 0, json_size, array_key);
+    if (array_start == 0 || json[array_start] != '[' ||
+        (array_end = json_container_end(json, json_size, array_start, '[', ']')) == 0) return 0;
+    cursor = array_start + 1;
+    while (cursor + 1 < array_end) {
+        size_t end;
+        int actual_value;
+        cursor = skip_space(json, array_end - 1, cursor);
+        if (cursor >= array_end - 1 || json[cursor] == ']') break;
+        if (json[cursor] != '{' ||
+            (end = json_container_end(json, array_end, cursor, '{', '}')) == 0 ||
+            end > array_end) return 0;
+        if (match_key == NULL ||
+            (json_find_bool_range(json, json_size, cursor, end, match_key, &actual_value) &&
+             actual_value == (match_value != 0))) {
+            *object_start = cursor;
+            *object_end = end;
+            return 1;
+        }
+        cursor = skip_space(json, array_end - 1, end);
+        if (cursor < array_end - 1 && json[cursor] == ',') cursor++;
+    }
+    return 0;
+}
+
 static int append_json_text(const char *json, size_t size, size_t start,
                             size_t end, char *output, size_t capacity,
                             int *has_text) {

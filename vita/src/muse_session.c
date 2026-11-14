@@ -424,6 +424,9 @@ static int fetch_vm(MuseVitaSession *session) {
     ResponseBuffer response = {response_data, 0, sizeof(response_data) - 1};
     long status = 0;
     CURLcode result;
+    size_t vm_object_start = 0;
+    size_t vm_object_end = 0;
+    int has_vm_object;
     if (curl == NULL) return -1;
     headers = curl_slist_append(headers, "X-API-Version: 1.0.0");
     {
@@ -449,16 +452,40 @@ static int fetch_vm(MuseVitaSession *session) {
     memset(vm_id, 0, sizeof(vm_id));
     memset(vm_name, 0, sizeof(vm_name));
     memset(vm_auth_token, 0, sizeof(vm_auth_token));
-    if ((!muse_json_find_string(response_data, response.size, "vm_ws_url",
-                                noise_host, sizeof(noise_host)) &&
-         !muse_json_find_string(response_data, response.size, "vm_url",
-                                noise_host, sizeof(noise_host))) ||
-        !muse_json_find_string(response_data, response.size, "vm_auth_token",
-                               vm_auth_token, sizeof(vm_auth_token)) ||
-        (!muse_json_find_string(response_data, response.size, "vm_id",
-                                vm_id, sizeof(vm_id)) &&
-         !muse_json_find_string(response_data, response.size, "vm_name",
-                                vm_name, sizeof(vm_name)))) return -1;
+    has_vm_object = muse_json_find_array_object_range(response_data, response.size,
+                                                      "vm_list", "default", 1,
+                                                      &vm_object_start, &vm_object_end);
+    if (!has_vm_object) {
+        has_vm_object = muse_json_find_array_object_range(response_data, response.size,
+                                                          "vm_list", NULL, 0,
+                                                          &vm_object_start, &vm_object_end);
+    }
+    if (has_vm_object) {
+        if ((!muse_json_find_string_range(response_data, response.size, vm_object_start,
+                                          vm_object_end, "vm_ws_url", noise_host,
+                                          sizeof(noise_host), NULL, NULL) &&
+             !muse_json_find_string_range(response_data, response.size, vm_object_start,
+                                          vm_object_end, "vm_url", noise_host,
+                                          sizeof(noise_host), NULL, NULL)) ||
+            !muse_json_find_string_range(response_data, response.size, vm_object_start,
+                                         vm_object_end, "vm_auth_token", vm_auth_token,
+                                         sizeof(vm_auth_token), NULL, NULL) ||
+            (!muse_json_find_string_range(response_data, response.size, vm_object_start,
+                                          vm_object_end, "vm_id", vm_id, sizeof(vm_id),
+                                          NULL, NULL) &&
+             !muse_json_find_string_range(response_data, response.size, vm_object_start,
+                                          vm_object_end, "vm_name", vm_name,
+                                          sizeof(vm_name), NULL, NULL))) return -1;
+    } else if ((!muse_json_find_string(response_data, response.size, "vm_ws_url",
+                                       noise_host, sizeof(noise_host)) &&
+                !muse_json_find_string(response_data, response.size, "vm_url",
+                                       noise_host, sizeof(noise_host))) ||
+               !muse_json_find_string(response_data, response.size, "vm_auth_token",
+                                      vm_auth_token, sizeof(vm_auth_token)) ||
+               (!muse_json_find_string(response_data, response.size, "vm_id",
+                                       vm_id, sizeof(vm_id)) &&
+                !muse_json_find_string(response_data, response.size, "vm_name",
+                                       vm_name, sizeof(vm_name)))) return -1;
     if (vm_id[0] == '\0') {
         if (vm_name[0] == '\0') return -1;
         strncpy(vm_id, vm_name, sizeof(vm_id) - 1);

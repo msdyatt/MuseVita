@@ -17,6 +17,15 @@ int muse_json_find_string_range(const char *json, size_t json_size,
 int muse_json_find_bool(const char *json, size_t json_size, const char *key, int *value);
 int muse_json_find_int64(const char *json, size_t json_size, const char *key, int64_t *value);
 int muse_json_has_key(const char *json, size_t json_size, const char *key);
+
+/* Find one object in an array value. When match_key is NULL, the first object
+   is returned; otherwise the first object whose boolean field equals
+   match_value is returned. The range is half-open and remains inside the
+   original JSON buffer. */
+int muse_json_find_array_object_range(const char *json, size_t json_size,
+                                      const char *array_key, const char *match_key,
+                                      int match_value, size_t *object_start,
+                                      size_t *object_end);
 /* Extract assistant text from the structured transcript/content forms used by
    Muse chat events. The result is bounded and NUL terminated. */
 int muse_json_find_assistant_text(const char *json, size_t json_size,

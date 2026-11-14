@@ -51,5 +51,27 @@ int main(void) {
                                              value, sizeof(value)));
         assert(strcmp(value, "direct") == 0);
     }
+    {
+        const char multiple_vms[] =
+            "{\"vm_list\":["
+            "{\"vm_id\":\"first\",\"vm_auth_token\":\"a\",\"default\":false},"
+            "{\"vm_id\":\"selected\",\"vm_auth_token\":\"b\",\"default\":true}]}";
+        size_t object_start = 0;
+        size_t object_end = 0;
+        assert(muse_json_find_array_object_range(multiple_vms, strlen(multiple_vms),
+                                                 "vm_list", "default", 1,
+                                                 &object_start, &object_end));
+        assert(muse_json_find_string_range(multiple_vms, strlen(multiple_vms),
+                                           object_start, object_end, "vm_id", value,
+                                           sizeof(value), NULL, NULL));
+        assert(strcmp(value, "selected") == 0);
+        assert(muse_json_find_array_object_range(multiple_vms, strlen(multiple_vms),
+                                                 "vm_list", NULL, 0,
+                                                 &object_start, &object_end));
+        assert(muse_json_find_string_range(multiple_vms, strlen(multiple_vms),
+                                           object_start, object_end, "vm_id", value,
+                                           sizeof(value), NULL, NULL));
+        assert(strcmp(value, "first") == 0);
+    }
     return 0;
 }
