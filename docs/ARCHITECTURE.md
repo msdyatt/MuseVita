@@ -1,8 +1,9 @@
-# Architecture and protocol implementation notes
+# MuseVita architecture and protocol notes
 
 ## Target
 
 - Device: PlayStation Vita running approved homebrew ecosystem / VitaSDK app
+- Future sibling: Nintendo 3DS client named MuseDS, sharing portable protocol modules
 - Model: one-time provisioning, then **direct client**; no persistent gateway
 - Local networking: Vita Wi-Fi -> Meta Muse API/VM
 - Distribution: user-supplied SDK token; no account credential collection on our public site
@@ -17,11 +18,12 @@
 
 **Do not guess any cryptographic framing from this document.** Port the SDK's exact fixture-tested behavior. Inspect `linux/tests/vectors/` and `linux/tests/test_link_client.py` in the current SDK source, and validate with the real service before shipping.
 
-## Vita implementation modules (planned)
+## Vita implementation modules
 
-- `platform/vita_http`: TLS certificate validation, WebSocket client, correct time, network state
-- `protocol/noise_xx`: interoperable Noise XX, keys, transcript and test vectors
-- `protocol/link`: stream framing, register/invoke/result, reconnect
+- `platform/vita_http`: TLS certificate validation, WebSocket client, correct time, network state (planned)
+- `protocol/noise_xx`: the exact initiator state machine is implemented with
+  VitaSDK mbedTLS; fixture interoperability and WSS integration are pending
+- `protocol/link`: shared stream framing is implemented; register/invoke/result and reconnect are planned
 - `protocol/chat`: send message, subscribe, parse events, history, sync
 - `storage/credentials`: local private encrypted credential storage, rotation and revoke
 - `ui`: chat, text input, pairing QR, status, notifications

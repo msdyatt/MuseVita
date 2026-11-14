@@ -1,4 +1,4 @@
-# First Codex task: Muse Vita
+# MuseVita implementation brief
 
 Act as a senior Vita homebrew developer and security-conscious systems engineer.
 

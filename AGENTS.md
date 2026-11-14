@@ -1,7 +1,7 @@
-# Muse Vita: agent instructions
+# MuseVita: project instructions
 
 Project owner and lead developer: **Sam Dyatt** (GitHub `@msdyatt`).
-Intended repository: `msdyatt/muse-vita`. License: MIT.
+Intended repository: `msdyatt/MuseVita`. License: MIT.
 This is an **unofficial** Meta Muse client for homebrew-capable PlayStation Vita consoles.
 
 ## Product goal
@@ -14,10 +14,12 @@ replace Meta's BLE authorization protocol without official support.
 
 ## Current status and non-negotiable honesty
 
-The existing `vita/src/main.c` is a UI **scaffold only**.
-The `web/` setup page generates QR demo sessions **only**.
-No real Muse pairing, credential transfer, cloud auth, Noise transport,
-chat, or VPK compilation has been verified in this package.
+The existing `vita/src/main.c` is a native UI and status foundation, not a
+live Muse client. The shared protocol directory contains control framing,
+link wire builders, and a Vita-built Noise XX initiator, but the complete WSS
+session is not integrated. The `web/` setup page generates QR demo sessions
+**only**. No real Muse pairing, credential transfer, cloud auth, chat, or Vita
+hardware installation has been verified in this package.
 Update README feature status whenever you implement and test something.
 
 ## Reference implementations
@@ -61,9 +63,9 @@ SDK license does **not** grant permission to embed a private SDK token.
 7. Do not claim a real working Muse connection until it has been verified on
    real hardware with valid user-owned gadget credentials.
 
-## First Codex milestone
+## First implementation milestone
 
-Make the Vita UI buildable, testable and more than a static splash screen.
+ Make the Vita UI buildable, testable and more than a static splash screen.
 Verify the VitaSDK CMake wiring. Add a native connection-status screen and
 pluggable network-state interface (mockable on a host) WITHOUT handling any
 Muse credentials yet. Prepare an implementation plan for the official

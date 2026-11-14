@@ -1,6 +1,6 @@
-# Contributing to Muse Vita
+# Contributing to MuseVita
 
-Muse Vita is an unofficial homebrew project created and maintained by
+MuseVita is an unofficial homebrew project created and maintained by
 **Sam Dyatt** (`@msdyatt`). Contributions and security reviews are welcome.
 
 - Read `AGENTS.md` before changing protocol, auth, or networking code.
