@@ -651,18 +651,25 @@ static int refresh_credentials(MuseVitaSession *session) {
 
 static int websocket_send(CURL *curl, const uint8_t *data, size_t size) {
     size_t offset = 0;
+    unsigned int flags = CURLWS_BINARY;
     const uint64_t deadline = (uint64_t)sceKernelGetSystemTimeWide() + HANDSHAKE_TIMEOUT_US;
     while (offset < size) {
         size_t sent = 0;
-        CURLcode result = curl_ws_send(curl, data + offset, size - offset, &sent, 0,
-                                       CURLWS_BINARY);
+        CURLcode result = curl_ws_send(curl, data + offset, size - offset, &sent, 0, flags);
         if (result == CURLE_AGAIN) {
+            if (sent > size - offset) return -1;
+            if (sent != 0) {
+                offset += sent;
+                flags = CURLWS_CONT;
+            }
+            if (offset == size) return 0;
             if ((uint64_t)sceKernelGetSystemTimeWide() >= deadline) return -1;
             sceKernelDelayThread(10000);
             continue;
         }
         if (result != CURLE_OK || sent == 0 || sent > size - offset) return -1;
         offset += sent;
+        if (offset < size) flags = CURLWS_CONT;
     }
     return 0;
 }

@@ -88,6 +88,7 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("CURLWS_CONT", source)
         self.assertIn("session->ws_message_active", source)
         self.assertIn("sent > size - offset", source)
+        self.assertIn("flags = CURLWS_CONT", source)
         self.assertIn("Control frames may appear between fragments", source)
 
     def test_request_timeout_cancels_the_link_stream(self):
