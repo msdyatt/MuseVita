@@ -113,6 +113,17 @@ static int receive_all(int socket, char *buffer, size_t capacity, size_t *size) 
     return -1;
 }
 
+static int send_bytes(int socket, const void *data, size_t size) {
+    const char *bytes = data;
+    size_t offset = 0;
+    while (offset < size) {
+        int sent = sceNetSend(socket, bytes + offset, (unsigned int)(size - offset), 0);
+        if (sent <= 0) return -1;
+        offset += (size_t)sent;
+    }
+    return 0;
+}
+
 static int send_text(int socket, int status, const char *content_type, const char *body) {
     char header[256];
     size_t body_size = strlen(body);
@@ -122,8 +133,8 @@ static int send_text(int socket, int status, const char *content_type, const cha
                                "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
                                status, content_type, (unsigned long)body_size);
     if (header_size < 0 || (size_t)header_size >= sizeof(header)) return -1;
-    if (sceNetSend(socket, header, (unsigned int)header_size, 0) != header_size) return -1;
-    return sceNetSend(socket, body, (unsigned int)body_size, 0) == (int)body_size ? 0 : -1;
+    if (send_bytes(socket, header, (size_t)header_size) != 0) return -1;
+    return send_bytes(socket, body, body_size);
 }
 
 static int send_file(int socket, const char *path, const char *content_type) {
@@ -147,8 +158,8 @@ static int send_file(int socket, const char *path, const char *content_type) {
                            "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
                            content_type, (unsigned long)total);
     if (header_size < 0 || (size_t)header_size >= sizeof(header)) return -1;
-    if (sceNetSend(socket, header, (unsigned int)header_size, 0) != header_size) return -1;
-    return sceNetSend(socket, transfer_file_buffer, (unsigned int)total, 0) == (int)total ? 0 : -1;
+    if (send_bytes(socket, header, (size_t)header_size) != 0) return -1;
+    return send_bytes(socket, transfer_file_buffer, total);
 }
 
 static int decrypt_bundle(MuseVitaPairingTransfer *transfer, const char *body) {
@@ -285,6 +296,7 @@ static int transfer_thread(unsigned int args, void *arg) {
         return 0;
     }
     set_status(transfer, "Scan QR with your phone");
+    transfer->listener_bound = true;
     while (!transfer->stop) {
         SceNetSockaddr peer;
         unsigned int peer_size = sizeof(peer);
@@ -295,6 +307,7 @@ static int transfer_thread(unsigned int args, void *arg) {
     }
     sceNetSocketClose(transfer->listen_socket);
     transfer->listen_socket = -1;
+    transfer->listener_bound = false;
     return 0;
 }
 
@@ -306,6 +319,7 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
     memset(transfer, 0, sizeof(*transfer));
     transfer->listen_socket = -1;
     transfer->thread = -1;
+    transfer->listener_bound = false;
     mbedtls_ecp_group_init(&transfer->group);
     mbedtls_mpi_init(&transfer->private_key);
     mbedtls_entropy_init(&transfer->entropy);
@@ -361,8 +375,15 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
         release_crypto(transfer);
         return -1;
     }
-    transfer->ready = true;
-    return 0;
+    for (unsigned int attempt = 0; attempt < 100; attempt++) {
+        if (transfer->listener_bound) {
+            transfer->ready = true;
+            return 0;
+        }
+        sceKernelDelayThread(10000);
+    }
+    muse_vita_pairing_transfer_stop(transfer);
+    return -1;
 }
 
 void muse_vita_pairing_transfer_stop(MuseVitaPairingTransfer *transfer) {

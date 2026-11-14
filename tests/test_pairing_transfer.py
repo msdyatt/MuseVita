@@ -78,6 +78,14 @@ class PairingTransferTests(unittest.TestCase):
         self.assertLess(frame_position, encrypt_position)
         self.assertIn("payload == NULL ? NULL : payload + offset", function)
 
+    def test_phone_transfer_waits_for_listener_and_handles_partial_tcp_writes(self):
+        source = (ROOT / "vita/src/pairing_transfer.c").read_text()
+        self.assertIn("volatile bool listener_bound", (ROOT / "vita/src/pairing_transfer.h").read_text())
+        self.assertIn("static int send_bytes", source)
+        self.assertIn("return send_bytes(socket, transfer_file_buffer, total);", source)
+        self.assertIn("if (transfer->listener_bound)", source)
+        self.assertIn("sceKernelDelayThread(10000)", source)
+
     def test_pairing_listener_only_starts_on_setup_page(self):
         source = (ROOT / "vita/src/main.c").read_text()
         self.assertIn("page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE", source)

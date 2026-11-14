@@ -19,6 +19,7 @@ typedef struct MuseVitaPairingTransfer {
     SceUID thread;
     int listen_socket;
     volatile bool stop;
+    volatile bool listener_bound;
     bool ready;
     bool consumed;
     uint64_t expires_us;
