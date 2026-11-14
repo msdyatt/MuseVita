@@ -39,6 +39,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Protected local credential storage | Not implemented |
 | HTTPS certificate validation and VM lookup | Not implemented |
 | WSS upgrade and encrypted link session | Not implemented |
+| Native chat view, bounded history, and Vita IME composer | Implemented; transport remains offline |
 | Direct chat send/subscribe and streamed replies | Not implemented |
 | Vita hardware installation/playability | Not tested in this environment |
 

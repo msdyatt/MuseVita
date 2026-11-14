@@ -17,6 +17,7 @@ set(VITA_APP_NAME "MuseVita")
 
 add_executable(musevita
   src/main.c
+  src/chat_state.c
   src/network_state.c
   ../protocol/control_framing.c
   ../protocol/link_wire.c
@@ -35,6 +36,8 @@ target_link_libraries(musevita
   ScePgf_stub
   SceSysmodule_stub
   SceCommonDialog_stub
+  SceAppUtil_stub
+  SceIme_stub
   SceKernelThreadMgr_stub
   mbedtls
   mbedcrypto
