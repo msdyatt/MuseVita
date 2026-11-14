@@ -26,12 +26,13 @@
 #include "network_state.h"
 #include "vita_media.h"
 
-#define WHITE RGBA8(246, 246, 248, 255)
-#define MUTED RGBA8(166, 172, 196, 255)
-#define BG RGBA8(11, 14, 27, 255)
-#define PANEL RGBA8(25, 31, 51, 255)
-#define ACCENT RGBA8(130, 110, 245, 255)
-#define BORDER RGBA8(54, 60, 82, 255)
+#define WHITE RGBA8(255, 255, 255, 255)
+#define MUTED RGBA8(211, 217, 232, 255)
+#define BG RGBA8(10, 13, 24, 255)
+#define PANEL RGBA8(24, 30, 49, 255)
+#define CARD RGBA8(36, 45, 70, 255)
+#define ACCENT RGBA8(157, 139, 255, 255)
+#define BORDER RGBA8(83, 94, 126, 255)
 #define WARNING RGBA8(240, 184, 100, 255)
 #define SUCCESS RGBA8(111, 214, 160, 255)
 #define MUSEVITA_PGF_BASE_SIZE 32.0f
@@ -65,7 +66,7 @@ static void text(vita2d_pgf *font, int x, int y, float size, uint32_t color, con
 static void draw_header(vita2d_pgf *font, MuseVitaNetworkState network,
                         const MuseVitaSession *session) {
     text(font, 42, 74, 38, WHITE, "MUSEVITA");
-    text(font, 44, 106, 18, MUTED, "Unofficial PS Vita client for Meta Muse");
+    text(font, 44, 106, 18, MUTED, "Native Muse client  •  direct Wi-Fi");
     text(font, 720, 74, 18, network == MUSEVITA_NETWORK_ONLINE ? SUCCESS : WARNING,
          muse_vita_network_label(network));
     text(font, 720, 106, 16, muse_vita_session_is_connected(session) ? SUCCESS : MUTED,
@@ -74,27 +75,32 @@ static void draw_header(vita2d_pgf *font, MuseVitaNetworkState network,
 
 static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network,
                              const MuseVitaSession *session) {
-    text(font, 70, 192, 29, WHITE, "Connection status");
-    text(font, 70, 233, 20, network == MUSEVITA_NETWORK_ONLINE ? SUCCESS : WARNING,
+    text(font, 70, 192, 31, WHITE, "Connection status");
+    text(font, 70, 234, 22, network == MUSEVITA_NETWORK_ONLINE ? SUCCESS : WARNING,
          muse_vita_network_label(network));
-    text(font, 70, 278, 19, WHITE, muse_vita_session_label(session));
-    text(font, 70, 314, 19, MUTED, muse_vita_session_is_connected(session)
+    text(font, 70, 280, 22, WHITE, muse_vita_session_label(session));
+    text(font, 70, 319, 20, MUTED, muse_vita_session_is_connected(session)
                                       ? "Direct Muse transport is active."
                                       : "Import official pairing state to connect directly.");
-    vita2d_draw_rectangle(70, 347, 820, 60, BORDER);
-    text(font, 93, 386, 20, WHITE, "Use SETUP to review one-time pairing requirements");
-    text(font, 70, 438, 18, MUTED, "TRIANGLE opens Muse Web in the Vita browser");
+    vita2d_draw_rectangle(70, 352, 820, 62, CARD);
+    text(font, 94, 391, 20, WHITE, "Use SETUP for the one-time pairing steps");
+    text(font, 70, 438, 18, MUTED, "TRIANGLE  Open Muse Web");
 }
 
 static void draw_setup_page(vita2d_pgf *font) {
-    text(font, 70, 192, 29, WHITE, "One-time Muse setup");
-    text(font, 70, 233, 19, WHITE, "1. Pair the Vita identity with an official BLE host");
-    text(font, 70, 270, 19, WHITE, "2. Copy identity, pairing, and SDK token files");
-    text(font, 70, 307, 19, WHITE, "3. Use direct Wi-Fi after setup");
-    text(font, 70, 344, 19, MUTED, "Bluetooth is needed only during provisioning.");
-    vita2d_draw_rectangle(70, 370, 820, 44, BORDER);
-    text(font, 93, 399, 18, WARNING, "Pairing transport is not active yet.");
-    if (setup_status[0] != '\0') text(font, 70, 445, 16, MUTED, setup_status);
+    text(font, 70, 190, 31, WHITE, "One-time Muse setup");
+    vita2d_draw_rectangle(70, 210, 820, 56, CARD);
+    text(font, 94, 246, 20, ACCENT, "PAIR ONCE");
+    text(font, 270, 246, 19, WHITE, "Then the Vita connects directly over Wi-Fi");
+    text(font, 78, 300, 21, WHITE, "1");
+    text(font, 118, 300, 20, WHITE, "Pair the Vita identity with an official BLE host");
+    text(font, 78, 340, 21, WHITE, "2");
+    text(font, 118, 340, 20, WHITE, "Copy identity, pairing, and SDK token files");
+    text(font, 78, 380, 21, WHITE, "3");
+    text(font, 118, 380, 20, WHITE, "Press SELECT to import and connect");
+    vita2d_draw_rectangle(70, 402, 820, 42, CARD);
+    text(font, 94, 430, 18, MUTED, "Bluetooth is needed only during provisioning.");
+    if (setup_status[0] != '\0') text(font, 70, 466, 16, MUTED, setup_status);
 }
 
 static int draw_wrapped(vita2d_pgf *font, int x, int y, int max_chars, int max_lines,
@@ -130,34 +136,34 @@ static int draw_wrapped(vita2d_pgf *font, int x, int y, int max_chars, int max_l
 }
 
 static void draw_chat_page(vita2d_pgf *font, const MuseVitaChatState *chat) {
-    text(font, 70, 192, 29, WHITE, "Main chat");
-    text(font, 690, 192, 16, chat->transport_connected ? SUCCESS : WARNING,
+    text(font, 70, 192, 31, WHITE, "Main chat");
+    text(font, 690, 192, 18, chat->transport_connected ? SUCCESS : WARNING,
          chat->transport_connected ? "CONNECTED" : "OFFLINE");
-    vita2d_draw_rectangle(70, 210, 820, 216, BORDER);
+    vita2d_draw_rectangle(70, 210, 820, 216, CARD);
 
     if (chat->message_count == 0) {
-        text(font, 95, 257, 20, MUTED, "No conversation loaded.");
-        text(font, 95, 293, 17, MUTED, "Messages from Muse will appear here.");
+        text(font, 95, 260, 21, MUTED, "No conversation loaded.");
+        text(font, 95, 300, 19, MUTED, "Messages from Muse will appear here.");
     } else {
         unsigned int first = chat->message_count > 4 ? chat->message_count - 4 : 0;
         int y = 240;
         for (unsigned int i = first; i < chat->message_count; i++) {
             const MuseVitaChatMessage *message = &chat->messages[i];
-            text(font, 95, y, 16, message->role == MUSEVITA_CHAT_USER ? ACCENT : SUCCESS,
+            text(font, 95, y, 18, message->role == MUSEVITA_CHAT_USER ? ACCENT : SUCCESS,
                  message->role == MUSEVITA_CHAT_USER ? "YOU" : "MUSE");
             y += 21;
-            y += draw_wrapped(font, 95, y, 70, 2, WHITE, message->text) * 22 + 10;
+            y += draw_wrapped(font, 95, y, 62, 2, WHITE, message->text) * 24 + 10;
             if (y > 408) break;
         }
     }
 
     if (chat->draft_ready) {
-        text(font, 70, 452, 16, WARNING, "DRAFT READY — not sent");
-        draw_wrapped(font, 260, 452, 56, 1, MUTED, chat->draft);
+        text(font, 70, 452, 18, WARNING, "DRAFT READY — not sent");
+        draw_wrapped(font, 280, 452, 50, 1, MUTED, chat->draft);
     } else {
-        text(font, 70, 452, 16, MUTED, "X  Type a message");
+        text(font, 70, 452, 18, MUTED, "X  Type a message");
     }
-    if (media_status[0] != '\0') text(font, 70, 480, 15, MUTED, media_status);
+    if (media_status[0] != '\0') text(font, 70, 480, 17, MUTED, media_status);
 }
 
 static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
@@ -172,10 +178,10 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
     if (page == PAGE_STATUS) draw_status_page(font, network, session);
     else if (page == PAGE_SETUP) draw_setup_page(font);
     else draw_chat_page(font, chat);
-    text(font, 44, 506, 18, MUTED, page == PAGE_CHAT ? "X Type  SQUARE Send  L Photo  R Voice" : "X  Next page");
-    text(font, 230, 506, 18, MUTED, "CIRCLE  Previous");
-    text(font, 470, 506, 18, MUTED, "TRIANGLE  Muse Web");
-    text(font, 700, 506, 18, MUTED, page == PAGE_SETUP ? "SELECT Reload" : "START Exit");
+    text(font, 44, 506, 16, MUTED, page == PAGE_CHAT ? "X Type  □ Send  L Photo  R Voice" : "X Next page");
+    text(font, 230, 506, 16, MUTED, "○ Previous");
+    text(font, 430, 506, 16, MUTED, "△ Muse Web");
+    text(font, 690, 506, 16, MUTED, page == PAGE_SETUP ? "SELECT Reload" : "START Exit");
     vita2d_end_drawing();
     vita2d_swap_buffers();
 }
@@ -307,7 +313,6 @@ int main(void) {
     SceCtrlData pad = {0};
     uint32_t previous = 0;
     int page = PAGE_STATUS;
-    bool reload_pairing = false;
     while (true) {
         sceCtrlPeekBufferPositive(0, &pad, 1);
         uint32_t just_pressed = pad.buttons & ~previous;
@@ -326,7 +331,6 @@ int main(void) {
             (void)sceAppMgrLaunchAppByUri(0x20000, MUSEVITA_WEB_URL);
         }
         if ((just_pressed & SCE_CTRL_SELECT) && page == PAGE_SETUP) {
-            reload_pairing = true;
             if (muse_vita_session_load_pairing(&muse_session) == 0) {
                 strcpy(setup_status, "Pairing imported; connecting...");
             } else {
@@ -340,11 +344,9 @@ int main(void) {
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
-        if (reload_pairing && network == MUSEVITA_NETWORK_ONLINE &&
-            muse_vita_session_label(&muse_session)[0] == 'P') {
-            reload_pairing = false;
-            (void)muse_vita_session_connect(&muse_session, &chat);
-        } else if (network == MUSEVITA_NETWORK_ONLINE && muse_vita_session_should_reconnect(&muse_session)) {
+        if (network == MUSEVITA_NETWORK_ONLINE &&
+            (muse_vita_session_should_connect(&muse_session) ||
+             muse_vita_session_should_reconnect(&muse_session))) {
             (void)muse_vita_session_connect(&muse_session, &chat);
         }
         draw(font, page, network, &chat, &muse_session);

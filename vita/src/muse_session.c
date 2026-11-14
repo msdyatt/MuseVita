@@ -915,6 +915,10 @@ bool muse_vita_session_is_connected(const MuseVitaSession *session) {
     return session != NULL && session->state == MUSEVITA_SESSION_CONNECTED;
 }
 
+bool muse_vita_session_should_connect(const MuseVitaSession *session) {
+    return session != NULL && session->state == MUSEVITA_SESSION_READY;
+}
+
 bool muse_vita_session_should_reconnect(const MuseVitaSession *session) {
     return session != NULL && session->state == MUSEVITA_SESSION_ERROR &&
            session->access_token[0] != '\0' &&

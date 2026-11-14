@@ -84,6 +84,7 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
                                  const char *item_type, const char *mime_type,
                                  const char *filename, const uint8_t *data,
                                  size_t data_size);
+bool muse_vita_session_should_connect(const MuseVitaSession *session);
 bool muse_vita_session_should_reconnect(const MuseVitaSession *session);
 bool muse_vita_session_is_connected(const MuseVitaSession *session);
 const char *muse_vita_session_label(const MuseVitaSession *session);
