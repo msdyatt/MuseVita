@@ -52,6 +52,11 @@ MuseLinkWireError muse_link_encode_body_chunk(
     int64_t stream_id, const uint8_t *body, size_t body_size, int end_body,
     uint8_t *output, size_t capacity, size_t *output_size);
 
+/* Cancel an abandoned request stream using the official Link reset envelope. */
+MuseLinkWireError muse_link_encode_reset(
+    int64_t stream_id, int reset_code, const char *reason,
+    uint8_t *output, size_t capacity, size_t *output_size);
+
 MuseLinkWireError muse_link_encode_http_request(
     int64_t stream_id, const char *method, const char *path,
     const MuseLinkHeader *headers, size_t header_count,
@@ -95,6 +100,10 @@ MuseLinkWireError muse_link_decode_noise_frame(
     const uint8_t *input, size_t input_size, MuseLinkNoiseFrame *frame);
 
 MuseLinkWireError muse_link_decode_service_response(
+    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming);
+
+/* Decode the request envelope used for device-originated reset fixtures. */
+MuseLinkWireError muse_link_decode_service_request(
     const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming);
 
 #endif

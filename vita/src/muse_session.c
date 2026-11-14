@@ -745,6 +745,17 @@ static int send_link_payload(MuseVitaSession *session, const uint8_t *payload, s
     return send_noise_payload(session, payload, payload_size);
 }
 
+static void cancel_request_stream(MuseVitaSession *session, const char *reason) {
+    size_t encoded_size = 0;
+    if (session == NULL || session->curl == NULL || !session->noise_ready ||
+        session->request_stream_id <= 0 || reason == NULL) return;
+    if (muse_link_encode_reset(session->request_stream_id, 1, reason,
+                               session->frame_buffer, sizeof(session->frame_buffer),
+                               &encoded_size) == MUSE_LINK_WIRE_OK) {
+        (void)send_link_payload(session, session->frame_buffer, encoded_size);
+    }
+}
+
 static int send_control_json(MuseVitaSession *session, const char *message, size_t message_size) {
     enum { CONTROL_BODY_CHUNK_BYTES = 16 * 1024 };
     uint8_t framed[CONTROL_BODY_CHUNK_BYTES];
@@ -832,6 +843,7 @@ static int wait_for_request(MuseVitaSession *session) {
             return -1;
         }
         if ((uint64_t)sceKernelGetSystemTimeWide() >= deadline) {
+            cancel_request_stream(session, "request timeout");
             session->request_active = false;
             clear_deferred_chat(session);
             return -1;
@@ -840,6 +852,7 @@ static int wait_for_request(MuseVitaSession *session) {
     }
     if (!session->request_done || session->request_failed ||
         session->request_status < 200 || session->request_status >= 300) {
+        if (!session->request_done) cancel_request_stream(session, "request abandoned");
         session->request_active = false;
         clear_deferred_chat(session);
         return -1;

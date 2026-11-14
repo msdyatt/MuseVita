@@ -82,6 +82,14 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("sent > size - offset", source)
         self.assertIn("Control frames may appear between fragments", source)
 
+    def test_request_timeout_cancels_the_link_stream(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        wire = (ROOT / "protocol/link_wire.h").read_text()
+        self.assertIn("muse_link_encode_reset", wire)
+        self.assertIn('"request timeout"', source)
+        self.assertIn('"request abandoned"', source)
+        self.assertIn("cancel_request_stream", source)
+
     def test_noise_send_encrypts_serialized_frame(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
         start = source.index("static int send_noise_payload")

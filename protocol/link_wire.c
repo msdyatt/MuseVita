@@ -129,6 +129,33 @@ MuseLinkWireError muse_link_encode_body_chunk(
     return result;
 }
 
+MuseLinkWireError muse_link_encode_reset(
+    int64_t stream_id, int reset_code, const char *reason,
+    uint8_t *output, size_t capacity, size_t *output_size) {
+    uint8_t reset[256];
+    uint8_t frame[320];
+    uint8_t service_request[360];
+    size_t reset_size = 0;
+    size_t frame_size = 0;
+    size_t service_size = 0;
+    MuseLinkWireError result;
+    if (output == NULL || output_size == NULL || reason == NULL ||
+        reset_code < 0 || reset_code > INT32_MAX) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    *output_size = 0;
+    result = append_int64(reset, sizeof(reset), &reset_size, 1, reset_code);
+    if (result == MUSE_LINK_WIRE_OK && reason[0] != '\0') {
+        result = append_string(reset, sizeof(reset), &reset_size, 2, reason);
+    }
+    if (result == MUSE_LINK_WIRE_OK) result = append_int64(frame, sizeof(frame), &frame_size, 1, stream_id);
+    if (result == MUSE_LINK_WIRE_OK) result = append_field(frame, sizeof(frame), &frame_size, 5,
+                                                              reset, reset_size);
+    if (result == MUSE_LINK_WIRE_OK) result = append_field(service_request, sizeof(service_request),
+                                                            &service_size, 2, frame, frame_size);
+    if (result == MUSE_LINK_WIRE_OK) result = append_bytes(output, capacity, output_size,
+                                                            service_request, service_size);
+    return result;
+}
+
 MuseLinkWireError muse_link_encode_http_request(
     int64_t stream_id, const char *method, const char *path,
     const MuseLinkHeader *headers, size_t header_count,
@@ -605,8 +632,9 @@ static MuseLinkWireError decode_reset(const uint8_t *input, size_t input_size,
     return MUSE_LINK_WIRE_OK;
 }
 
-MuseLinkWireError muse_link_decode_service_response(
-    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming) {
+static MuseLinkWireError decode_service_envelope(const uint8_t *input, size_t input_size,
+                                                 unsigned envelope_field,
+                                                 MuseLinkIncoming *incoming) {
     const uint8_t *service_payload = NULL;
     size_t service_payload_size = 0;
     size_t offset = 0;
@@ -616,7 +644,7 @@ MuseLinkWireError muse_link_decode_service_response(
         unsigned field, wire_type;
         MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
         if (result != MUSE_LINK_WIRE_OK) return result;
-        if (field == 1) {
+        if (field == envelope_field) {
             if (wire_type != 2 || read_delimited(input, input_size, &offset,
                                                   &service_payload, &service_payload_size) != MUSE_LINK_WIRE_OK) {
                 return MUSE_LINK_WIRE_INVALID_MESSAGE;
@@ -660,4 +688,14 @@ MuseLinkWireError muse_link_decode_service_response(
         }
     }
     return MUSE_LINK_WIRE_OK;
+}
+
+MuseLinkWireError muse_link_decode_service_response(
+    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming) {
+    return decode_service_envelope(input, input_size, 1, incoming);
+}
+
+MuseLinkWireError muse_link_decode_service_request(
+    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming) {
+    return decode_service_envelope(input, input_size, 2, incoming);
 }

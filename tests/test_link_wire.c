@@ -87,6 +87,15 @@ int main(void) {
         assert(memcmp(open_chunk, end_chunk, open_size) != 0);
     }
     {
+        uint8_t reset[128];
+        MuseLinkIncoming incoming;
+        assert(muse_link_encode_reset(7, 1, "request timeout", reset, sizeof(reset), &proto_size) ==
+               MUSE_LINK_WIRE_OK);
+        assert(muse_link_decode_service_request(reset, proto_size, &incoming) == MUSE_LINK_WIRE_OK);
+        assert(incoming.kind == MUSE_LINK_INCOMING_RESET);
+        assert(incoming.stream_id == 7 && incoming.reset_code == 1);
+    }
+    {
         uint8_t large_body[60000];
         uint8_t large_output[70000];
         memset(large_body, 'x', sizeof(large_body));
