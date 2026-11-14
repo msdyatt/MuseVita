@@ -27,7 +27,8 @@
 - `protocol/link`: shared stream framing, register/invoke/result, HTTP-over-link
   request encoding, and response decoding are implemented
 - `protocol/chat`: chat send, NDJSON subscription, and streamed event rendering
-  are implemented; history pagination and reconnect remain
+  are implemented; history pagination remains and transport reconnect now
+  retries after a bounded delay
 - `storage/credentials`: one-time plaintext import is converted to an encrypted
   local credential blob; hardware extraction review, revoke, and rotation remain
 - `ui`: chat, text input, pairing QR, status, notifications

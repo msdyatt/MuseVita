@@ -288,6 +288,9 @@ int main(void) {
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
+        if (network == MUSEVITA_NETWORK_ONLINE && muse_vita_session_should_reconnect(&muse_session)) {
+            (void)muse_vita_session_connect(&muse_session, &chat);
+        }
         draw(font, page, network, &chat, &muse_session);
         if (ime_open) (void)vita2d_common_dialog_update();
         sceKernelDelayThread(16000);

@@ -20,6 +20,7 @@
 #define USER_AGENT "MuseVita/0.1.0 (PlayStation Vita)"
 #define HANDSHAKE_TIMEOUT_US (20u * 1000u * 1000u)
 #define PING_INTERVAL_US (20u * 1000u * 1000u)
+#define RETRY_DELAY_US (10u * 1000u * 1000u)
 #define MAX_HTTP_JSON_BYTES (64u * 1024u)
 #define CREDENTIAL_MAGIC "MVC1"
 #define CREDENTIAL_PLAINTEXT_BYTES 4096u
@@ -61,6 +62,13 @@ static void close_transport(MuseVitaSession *session) {
     session->assembly_count = 0;
     session->subscribe_buffer_size = 0;
     session->request_buffer_size = 0;
+}
+
+static void set_transport_error(MuseVitaSession *session) {
+    close_transport(session);
+    session->state = MUSEVITA_SESSION_ERROR;
+    session->retry_after_us = (uint64_t)sceKernelGetSystemTimeWide() + RETRY_DELAY_US;
+    if (session->chat != NULL) session->chat->transport_connected = false;
 }
 
 static size_t curl_write_response(char *data, size_t size, size_t count, void *context) {
@@ -140,9 +148,16 @@ static int save_encrypted_credentials(const MuseVitaSession *session) {
     char plaintext[CREDENTIAL_PLAINTEXT_BYTES];
     mbedtls_gcm_context gcm;
     uint64_t time = (uint64_t)sceKernelGetSystemTimeWide();
-    int plaintext_size = snprintf(plaintext, sizeof(plaintext),
+    int plaintext_size;
+    if (session->sdk_token[0] != '\0') {
+        plaintext_size = snprintf(plaintext, sizeof(plaintext),
+                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"sdk_token\":\"%s\"}",
+                                  session->access_token, session->refresh_token, session->sdk_token);
+    } else {
+        plaintext_size = snprintf(plaintext, sizeof(plaintext),
                                   "{\"access_token\":\"%s\",\"refresh_token\":\"%s\"}",
                                   session->access_token, session->refresh_token);
+    }
     if (plaintext_size < 0 || (size_t)plaintext_size >= sizeof(plaintext)) return -1;
     for (unsigned i = 0; i < sizeof(nonce); i++) {
         nonce[i] = (uint8_t)(time >> ((i % 8u) * 8u));
@@ -198,6 +213,8 @@ static int load_encrypted_credentials(MuseVitaSession *session) {
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string((const char *)plaintext, plaintext_size, "refresh_token",
                                session->refresh_token, sizeof(session->refresh_token))) return -1;
+    (void)muse_json_find_string((const char *)plaintext, plaintext_size, "sdk_token",
+                                session->sdk_token, sizeof(session->sdk_token));
     return 0;
 }
 
@@ -264,6 +281,8 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
         session->state = MUSEVITA_SESSION_NO_PAIRING;
         return -1;
     }
+    (void)muse_json_find_string(pairing, pairing_size, "sdk_token",
+                                session->sdk_token, sizeof(session->sdk_token));
     if (save_encrypted_credentials(session) != 0) {
         session->state = MUSEVITA_SESSION_NO_PAIRING;
         return -1;
@@ -326,7 +345,7 @@ static int refresh_credentials(MuseVitaSession *session) {
     CURL *curl = curl_easy_init();
     struct curl_slist *headers = NULL;
     char response_data[8192];
-    char request_body[256];
+    char request_body[512];
     char raw_refresh[2048];
     char authorization[2304];
     ResponseBuffer response = {response_data, 0, sizeof(response_data) - 1};
@@ -338,7 +357,13 @@ static int refresh_credentials(MuseVitaSession *session) {
     colon = colon == NULL ? session->refresh_token : colon + 1;
     strncpy(raw_refresh, colon, sizeof(raw_refresh) - 1);
     raw_refresh[sizeof(raw_refresh) - 1] = '\0';
-    snprintf(request_body, sizeof(request_body), "{\"device_id\":\"%s\"}", session->device_id);
+    if (session->sdk_token[0] != '\0') {
+        snprintf(request_body, sizeof(request_body),
+                 "{\"device_id\":\"%s\",\"sdk_token\":\"%s\"}",
+                 session->device_id, session->sdk_token);
+    } else {
+        snprintf(request_body, sizeof(request_body), "{\"device_id\":\"%s\"}", session->device_id);
+    }
     snprintf(authorization, sizeof(authorization), "Authorization: Bearer hatch_refresh:%s", raw_refresh);
     headers = curl_slist_append(headers, authorization);
     headers = curl_slist_append(headers, "Content-Type: application/json");
@@ -653,14 +678,15 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     size_t message_size = 0;
     uint8_t handshake[128];
     int connected;
-    if (session == NULL || chat == NULL || session->state != MUSEVITA_SESSION_READY) return -1;
+    if (session == NULL || chat == NULL ||
+        (session->state != MUSEVITA_SESSION_READY && session->state != MUSEVITA_SESSION_ERROR)) return -1;
     session->chat = chat;
     session->state = MUSEVITA_SESSION_CONNECTING;
     {
         int fetch_result = fetch_vm(session);
         if (fetch_result == -2 && refresh_credentials(session) == 0) fetch_result = fetch_vm(session);
         if (fetch_result != 0) {
-            session->state = MUSEVITA_SESSION_ERROR;
+            set_transport_error(session);
             return -1;
         }
     }
@@ -704,9 +730,7 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     chat->transport_connected = true;
     return 0;
 fail:
-    close_transport(session);
-    session->state = MUSEVITA_SESSION_ERROR;
-    chat->transport_connected = false;
+    set_transport_error(session);
     return -1;
 }
 
@@ -718,9 +742,7 @@ int muse_vita_session_poll(MuseVitaSession *session) {
         uint8_t ping = 0;
         size_t sent = 0;
         if (curl_ws_send(session->curl, &ping, 0, &sent, 0, CURLWS_PING) != CURLE_OK) {
-            close_transport(session);
-            session->state = MUSEVITA_SESSION_ERROR;
-            if (session->chat) session->chat->transport_connected = false;
+            set_transport_error(session);
             return -1;
         }
         session->last_ping_us = (uint64_t)sceKernelGetSystemTimeWide();
@@ -728,15 +750,12 @@ int muse_vita_session_poll(MuseVitaSession *session) {
     for (unsigned i = 0; i < 8; i++) {
         result = websocket_receive(session, 0, &message_size);
         if (result < 0) {
-            session->state = MUSEVITA_SESSION_ERROR;
-            if (session->chat) session->chat->transport_connected = false;
+            set_transport_error(session);
             return -1;
         }
         if (result == 0) return 0;
         if (process_websocket_message(session, session->ws_message, message_size) != 0) {
-            close_transport(session);
-            session->state = MUSEVITA_SESSION_ERROR;
-            if (session->chat) session->chat->transport_connected = false;
+            set_transport_error(session);
             return -1;
         }
     }
@@ -774,6 +793,12 @@ void muse_vita_session_term(MuseVitaSession *session) {
 
 bool muse_vita_session_is_connected(const MuseVitaSession *session) {
     return session != NULL && session->state == MUSEVITA_SESSION_CONNECTED;
+}
+
+bool muse_vita_session_should_reconnect(const MuseVitaSession *session) {
+    return session != NULL && session->state == MUSEVITA_SESSION_ERROR &&
+           session->access_token[0] != '\0' &&
+           (uint64_t)sceKernelGetSystemTimeWide() >= session->retry_after_us;
 }
 
 const char *muse_vita_session_label(const MuseVitaSession *session) {

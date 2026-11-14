@@ -44,6 +44,7 @@ typedef struct MuseVitaSession {
     size_t assembly_size;
     size_t ws_message_size;
     uint64_t last_ping_us;
+    uint64_t retry_after_us;
     size_t subscribe_buffer_size;
     size_t request_buffer_size;
     char active_assistant_id[128];
@@ -71,6 +72,7 @@ int muse_vita_session_load_pairing(MuseVitaSession *session);
 int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat);
 int muse_vita_session_poll(MuseVitaSession *session);
 int muse_vita_session_send_chat(MuseVitaSession *session, const char *message);
+bool muse_vita_session_should_reconnect(const MuseVitaSession *session);
 bool muse_vita_session_is_connected(const MuseVitaSession *session);
 const char *muse_vita_session_label(const MuseVitaSession *session);
 
