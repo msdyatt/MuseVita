@@ -163,6 +163,21 @@ class ControlFramingTests(unittest.TestCase):
             )
             subprocess.run([str(binary)], check=True)
 
+    def test_chat_state_strips_controls_without_corrupting_utf8(self):
+        compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+        if compiler is None:
+            self.skipTest("no host C compiler available")
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            binary = Path(temp_dir) / "test_chat_state"
+            subprocess.run(
+                [compiler, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I",
+                 str(root / "vita/src"), str(root / "vita/src/chat_state.c"),
+                 str(root / "tests/test_chat_state.c"), "-o", str(binary)],
+                check=True,
+            )
+            subprocess.run([str(binary)], check=True)
+
 
 if __name__ == "__main__":
     unittest.main()

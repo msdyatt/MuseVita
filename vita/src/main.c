@@ -131,21 +131,29 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network,
 }
 
 static void draw_setup_page(vita2d_pgf *font, const MuseVitaPairingTransfer *transfer) {
-    text(font, 70, 190, 31, WHITE, "One-time Muse setup");
-    vita2d_draw_rectangle(70, 210, 820, 56, CARD);
-    text(font, 94, 246, 20, ACCENT, "PAIR ONCE");
-    text(font, 270, 246, 19, WHITE, "Then the Vita connects directly over Wi-Fi");
-    text(font, 78, 300, 21, WHITE, "1");
-    text(font, 118, 300, 19, WHITE, "Scan after official BLE setup");
-    text(font, 78, 340, 21, WHITE, "2");
-    text(font, 118, 340, 18, WHITE, "Choose identity.json, pairing.json, sdk_token");
-    text(font, 78, 380, 21, WHITE, "3");
-    text(font, 118, 380, 19, WHITE, "Press SELECT to import and connect");
-    vita2d_draw_rectangle(70, 402, 820, 42, CARD);
-    text(font, 94, 430, 17, MUTED, "Encrypted locally • one-time transfer • no bridge");
+    text(font, 70, 184, 31, WHITE, "Connect your phone");
+    text(font, 70, 214, 18, MUTED, "One quick transfer, then MuseVita is ready.");
+
+    vita2d_draw_rectangle(70, 238, 570, 55, CARD);
+    text(font, 94, 272, 17, ACCENT, "1");
+    text(font, 142, 262, 19, WHITE, "Scan this code");
+    text(font, 142, 283, 15, MUTED, "Use your iPhone camera");
+
+    vita2d_draw_rectangle(70, 304, 570, 70, CARD);
+    text(font, 94, 337, 17, ACCENT, "2");
+    text(font, 142, 328, 19, WHITE, "Choose the 3 pairing files");
+    text(font, 142, 350, 15, MUTED, "identity.json  •  pairing.json  •  sdk_token");
+
+    vita2d_draw_rectangle(70, 385, 570, 43, CARD);
+    text(font, 94, 413, 17, ACCENT, "3");
+    text(font, 142, 413, 19, WHITE, "Press SELECT here");
+
     draw_pairing_qr(muse_vita_pairing_transfer_qr(transfer));
     if (setup_status[0] != '\0') text(font, 70, 466, 16, MUTED, setup_status);
     else text(font, 70, 466, 16, MUTED, muse_vita_pairing_transfer_status(transfer));
+    text(font, 70, 488, 14, MUTED, "Can't scan? Open:");
+    text(font, 240, 488, 14, ACCENT,
+         muse_vita_pairing_transfer_manual_url(transfer));
 }
 
 static int draw_wrapped(vita2d_pgf *font, int x, int y, int max_chars, int max_lines,
@@ -227,7 +235,8 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
     text(font, 44, 506, 16, MUTED, page == PAGE_CHAT ? "X Type  □ Send  L Photo  R Voice" : "X Next page");
     text(font, 230, 506, 16, MUTED, "○ Previous");
     text(font, 430, 506, 16, MUTED, "△ Muse Web");
-    text(font, 690, 506, 16, MUTED, page == PAGE_SETUP ? "SELECT Reload" : "START Exit");
+    text(font, 690, page == PAGE_SETUP ? 522 : 506, 16, MUTED,
+         page == PAGE_SETUP ? "SELECT Reload" : "START Exit");
     vita2d_end_drawing();
     vita2d_swap_buffers();
 }

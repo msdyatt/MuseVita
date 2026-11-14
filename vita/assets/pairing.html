@@ -1,46 +1,100 @@
 <!doctype html>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MuseVita setup</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Connect MuseVita</title>
 <style>
-body{font:16px system-ui,sans-serif;background:#0a0d18;color:#f7f8ff;margin:0;padding:24px}
-main{max-width:560px;margin:auto;background:#181e31;border-radius:18px;padding:24px}
-h1{font-size:28px;margin-top:0}p{color:#d3d9e8;line-height:1.45}
-label{display:block;border:2px dashed #9d8bff;border-radius:12px;padding:22px;text-align:center;margin:18px 0}
-input{display:none}button{background:#9d8bff;border:0;border-radius:10px;padding:13px 18px;font-weight:700;font-size:16px}
-#status{margin-top:18px;color:#6fd6a0;white-space:pre-wrap}
+:root{color-scheme:dark;--bg:#0a0d18;--card:#181e31;--card2:#222b45;--ink:#f7f8ff;--muted:#b8c1d8;--accent:#9d8bff;--ok:#6fd6a0}
+*{box-sizing:border-box}
+body{margin:0;padding:20px;background:var(--bg);color:var(--ink);font:17px -apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:24px;background:var(--card);border-radius:24px;box-shadow:0 12px 40px #0005}
+.eyebrow{color:var(--accent);font-size:12px;font-weight:800;letter-spacing:.14em}
+h1{margin:8px 0 8px;font-size:31px;line-height:1.08;letter-spacing:-.02em}
+.lede{margin:0 0 22px;color:var(--muted);line-height:1.4}
+.step{display:flex;gap:14px;margin:12px 0;padding:16px;background:var(--card2);border-radius:16px}
+.number{flex:0 0 30px;width:30px;height:30px;border-radius:15px;background:var(--accent);color:#111326;text-align:center;padding-top:4px;font-weight:800}
+.step-body{flex:1;min-width:0}
+h2{margin:0 0 3px;font-size:18px}
+.step p{margin:0 0 12px;color:var(--muted);line-height:1.35}
+.file-button,button{display:inline-block;border:0;border-radius:12px;background:var(--accent);color:#111326;padding:13px 16px;font:inherit;font-weight:800;cursor:pointer}
+.file-button input{position:absolute;width:1px;height:1px;opacity:0}
+button{width:100%;margin-top:2px}
+button:disabled{opacity:.38;cursor:not-allowed}
+#files-list{margin-top:11px;color:var(--muted);font-size:14px;line-height:1.55}
+.ready{color:var(--ok)}
+#status{margin:18px 2px 0;color:var(--ok);font-weight:650;line-height:1.4;min-height:24px}
+details{margin-top:18px;color:var(--muted);font-size:14px;line-height:1.45}
+summary{color:var(--ink);cursor:pointer;font-weight:650}
+code{font-size:.9em;color:var(--ink)}
 </style>
 <main>
-<h1>Connect MuseVita</h1>
-<p>This is a one-time local transfer. Choose the official <code>identity.json</code>, <code>pairing.json</code>, and <code>sdk_token</code> files from your pairing host. They are encrypted in this browser for this Vita and sent only over your local network.</p>
-<label><input id="files" type="file" multiple>Choose pairing files</label>
-<button id="send" disabled>Encrypt and send to Vita</button>
-<div id="status">Waiting for files…</div>
+  <div class="eyebrow">ONE-TIME SETUP</div>
+  <h1>Connect MuseVita</h1>
+  <p class="lede">Choose three pairing files. They are encrypted for this Vita before they leave your phone.</p>
+
+  <section class="step">
+    <div class="number">1</div>
+    <div class="step-body">
+      <h2>Choose your files</h2>
+      <p>Pick all three in the Files app.</p>
+      <label class="file-button"><input id="files" type="file" multiple><span id="choose">Choose files</span></label>
+      <div id="files-list">○ identity.json<br>○ pairing.json<br>○ sdk_token</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="number">2</div>
+    <div class="step-body">
+      <h2>Send to your Vita</h2>
+      <p>Keep this page open until it says it is done.</p>
+      <button id="send" disabled>Send securely</button>
+    </div>
+  </section>
+
+  <div id="status" role="status" aria-live="polite">Waiting for your files…</div>
+  <details>
+    <summary>Need help?</summary>
+    <p>Your phone and Vita must be on the same Wi‑Fi. If scanning does not open this page, type <code>http://VITA-IP:8768/</code> in Safari. The Vita shows its address beside the QR code.</p>
+  </details>
 </main>
 <script src="/pairing-crypto.js"></script>
 <script>
 const $=id=>document.getElementById(id), p=new URLSearchParams(location.search), sid=p.get('s'), pinned=p.get('k');
+const required=['identity.json','pairing.json','sdk_token'];
 const enc=new TextEncoder(), b64=u=>{let s='';for(const x of u)s+=String.fromCharCode(x);return btoa(s).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')};
-let chosen=[];$('files').onchange=e=>{chosen=[...e.target.files];$('send').disabled=chosen.length<3;$('status').textContent=chosen.map(f=>f.name).join(', ')};
+let chosen=[];
+function updateFiles(){
+  const names=new Set(chosen.map(f=>f.name));
+  $('files-list').innerHTML=required.map(name=>names.has(name)?'<span class="ready">✓ '+name+'</span>':'○ '+name).join('<br>');
+  $('send').disabled=!required.every(name=>names.has(name));
+  $('choose').textContent=chosen.length?'Change files':'Choose files';
+  if(!$('send').disabled)$('status').textContent='Ready — send when you are ready.';
+}
+$('files').onchange=e=>{chosen=[...e.target.files];updateFiles()};
 async function go(){try{
- if(!sid||!pinned)throw Error('Invalid or incomplete QR link.');
- const names=new Set(chosen.map(f=>f.name));if(!names.has('identity.json')||!names.has('pairing.json')||!names.has('sdk_token'))throw Error('Select all three official pairing files.');
- const cfg=await (await fetch('/pair/config?s='+encodeURIComponent(sid))).json();if(cfg.sid!==sid||cfg.pub!==pinned)throw Error('Vita key does not match this QR.');
- const raw=pinned.replaceAll('-','+').replaceAll('_','/');const vitaBytes=Uint8Array.from(atob(raw+'='.repeat((4-raw.length%4)%4)),c=>c.charCodeAt(0));
- const obj={};for(const f of chosen)obj[f.name==='sdk_token'?'sdk_token':f.name.slice(0,-5)]=await f.text();
- let epk,iv,ct;
- if(globalThis.crypto&&globalThis.crypto.subtle){
-  const vita=await crypto.subtle.importKey('raw',vitaBytes,{name:'ECDH',namedCurve:'P-256'},false,[]);
-  const eph=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
-  const bits=await crypto.subtle.deriveBits({name:'ECDH',public:vita},eph.privateKey,256);
-  const key=await crypto.subtle.importKey('raw',bits,'HKDF',false,['deriveKey']);
-  const aes=await crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:enc.encode(sid),info:enc.encode('MuseVita pairing transfer v1')},key,{name:'AES-GCM',length:256},false,['encrypt']);
-  iv=crypto.getRandomValues(new Uint8Array(12));ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:enc.encode(sid)},aes,enc.encode(JSON.stringify(obj))));
-  epk=new Uint8Array(await crypto.subtle.exportKey('raw',eph.publicKey));
- }else if(globalThis.MuseVitaCrypto&&globalThis.MuseVitaCrypto.seal){
-  const sealed=globalThis.MuseVitaCrypto.seal(vitaBytes,sid,obj);epk=sealed.epk;iv=sealed.iv;ct=sealed.ct;
- }else throw Error('This browser cannot encrypt the pairing bundle.');
- const body={sid,epk:b64(epk),iv:b64(iv),ct:b64(ct)};
- const res=await fetch('/pair/upload?s='+encodeURIComponent(sid),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});if(!res.ok)throw Error(await res.text());$('status').textContent='Encrypted bundle sent. Return to the Vita and press SELECT.';$('send').disabled=true;
- }catch(e){$('status').textContent=e.message}}
+  if(!sid||!pinned)throw Error('This setup link is incomplete. Scan the QR code again.');
+  const names=new Set(chosen.map(f=>f.name));
+  if(!required.every(name=>names.has(name)))throw Error('Choose identity.json, pairing.json, and sdk_token.');
+  const cfgResponse=await fetch('/pair/config?s='+encodeURIComponent(sid));
+  if(!cfgResponse.ok)throw Error('The Vita setup code expired. Reopen SETUP and scan again.');
+  const cfg=await cfgResponse.json();
+  if(cfg.sid!==sid||cfg.pub!==pinned)throw Error('This code belongs to a different Vita. Scan again.');
+  const raw=pinned.replaceAll('-','+').replaceAll('_','/');
+  const vitaBytes=Uint8Array.from(atob(raw+'='.repeat((4-raw.length%4)%4)),c=>c.charCodeAt(0));
+  const obj={};for(const f of chosen)obj[f.name==='sdk_token'?'sdk_token':f.name.slice(0,-5)]=await f.text();
+  let epk,iv,ct;
+  if(globalThis.crypto&&globalThis.crypto.subtle){
+    const vita=await crypto.subtle.importKey('raw',vitaBytes,{name:'ECDH',namedCurve:'P-256'},false,[]);
+    const eph=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
+    const bits=await crypto.subtle.deriveBits({name:'ECDH',public:vita},eph.privateKey,256);
+    const key=await crypto.subtle.importKey('raw',bits,'HKDF',false,['deriveKey']);
+    const aes=await crypto.subtle.deriveKey({name:'HKDF',hash:'SHA-256',salt:enc.encode(sid),info:enc.encode('MuseVita pairing transfer v1')},key,{name:'AES-GCM',length:256},false,['encrypt']);
+    iv=crypto.getRandomValues(new Uint8Array(12));ct=new Uint8Array(await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:enc.encode(sid)},aes,enc.encode(JSON.stringify(obj))));
+    epk=new Uint8Array(await crypto.subtle.exportKey('raw',eph.publicKey));
+  }else if(globalThis.MuseVitaCrypto&&globalThis.MuseVitaCrypto.seal){
+    const sealed=globalThis.MuseVitaCrypto.seal(vitaBytes,sid,obj);epk=sealed.epk;iv=sealed.iv;ct=sealed.ct;
+  }else throw Error('This browser cannot encrypt the pairing files.');
+  const response=await fetch('/pair/upload?s='+encodeURIComponent(sid),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sid,epk:b64(epk),iv:b64(iv),ct:b64(ct)})});
+  if(!response.ok)throw Error('The Vita rejected this transfer. Reopen SETUP and try again.');
+  $('status').textContent='Done — return to the Vita and press SELECT.';$('send').disabled=true;
+}catch(e){$('status').textContent=e&&e.message?e.message:'Something went wrong. Please scan again.'}}
 $('send').onclick=go;
 </script>

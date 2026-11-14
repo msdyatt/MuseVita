@@ -39,6 +39,23 @@ static int read_file(const char *path, char *output, size_t capacity, size_t *ou
 static int delete_file(const char *path);
 static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size);
 
+static int chat_event_is_main_session(const char *line, size_t line_size) {
+    char session_id[64];
+    return !muse_json_find_string(line, line_size, "session_id", session_id,
+                                  sizeof(session_id)) || strcmp(session_id, "main") == 0;
+}
+
+static int chat_event_role_is(const char *line, size_t line_size, const char *expected) {
+    char role[32];
+    return !muse_json_find_string(line, line_size, "role", role, sizeof(role)) ||
+           strcmp(role, expected) == 0;
+}
+
+static int chat_event_display_text_ready(const char *line, size_t line_size) {
+    int ready;
+    return !muse_json_find_bool(line, line_size, "display_text_ready", &ready) || ready;
+}
+
 static void set_api_root(MuseVitaSession *session, const char *candidate) {
     size_t length;
     if (session == NULL || candidate == NULL || strncmp(candidate, "https://", 8) != 0) return;
@@ -974,6 +991,17 @@ static void consume_chat_line(MuseVitaSession *session, const char *line, size_t
         if (sequence <= *last_sequence) return;
         *last_sequence = sequence;
     }
+    if (!chat_event_is_main_session(line, line_size)) return;
+    if (strcmp(event, "message.user") == 0 &&
+        (!chat_event_role_is(line, line_size, "user") ||
+         !chat_event_display_text_ready(line, line_size))) return;
+    if ((strcmp(event, "message.assistant") == 0 ||
+         strcmp(event, "delta.message_start") == 0 ||
+         strcmp(event, "delta.text_append") == 0 ||
+         strcmp(event, "delta.message_done") == 0) &&
+        !chat_event_role_is(line, line_size, "assistant")) return;
+    if (strcmp(event, "message.assistant") == 0 &&
+        !chat_event_display_text_ready(line, line_size)) return;
     if (has_parent && session->last_user_id[0] != '\0' &&
         strcmp(parent_identifier, session->last_user_id) != 0 &&
         strcmp(parent_identifier, session->active_assistant_id) != 0) return;

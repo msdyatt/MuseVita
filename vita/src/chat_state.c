@@ -2,10 +2,27 @@
 
 #include <string.h>
 
+static size_t append_clean_text(char *destination, size_t offset, const char *source) {
+    if (source == NULL) return offset;
+    while (*source != '\0' && offset + 1 < MUSEVITA_CHAT_MAX_TEXT) {
+        unsigned char value = (unsigned char)*source++;
+        /* Match the official client: remove C0/DEL controls while preserving
+           UTF-8 text, including encoded C1 controls. */
+        if (value < 0x20u || value == 0x7fu) continue;
+        if (value == 0xc2u && (unsigned char)*source >= 0x80u &&
+            (unsigned char)*source <= 0x9fu) {
+            source++;
+            continue;
+        }
+        destination[offset++] = (char)value;
+    }
+    destination[offset] = '\0';
+    return offset;
+}
+
 static void copy_text(char *destination, const char *source) {
-    if (!source) source = "";
-    strncpy(destination, source, MUSEVITA_CHAT_MAX_TEXT - 1);
-    destination[MUSEVITA_CHAT_MAX_TEXT - 1] = '\0';
+    destination[0] = '\0';
+    (void)append_clean_text(destination, 0, source);
 }
 
 void muse_vita_chat_init(MuseVitaChatState *state) {
@@ -42,7 +59,7 @@ void muse_vita_chat_append_assistant(MuseVitaChatState *state, const char *text)
     current_size = strlen(message->text);
     remaining = MUSEVITA_CHAT_MAX_TEXT - 1 - current_size;
     if (remaining == 0 || text == NULL) return;
-    strncat(message->text, text, remaining);
+    (void)append_clean_text(message->text, current_size, text);
 }
 
 void muse_vita_chat_replace_last_assistant(MuseVitaChatState *state, const char *text) {

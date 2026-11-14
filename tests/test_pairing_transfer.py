@@ -107,6 +107,15 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('strcmp(path, "/") == 0', source)
         self.assertIn('"HTTP/1.1 302 Found\\r\\nLocation: %s\\r\\n"', source)
         self.assertIn('"/pair?s=%s&k=%s"', source)
+        self.assertIn('muse_vita_pairing_transfer_manual_url', source)
+
+    def test_phone_onboarding_is_short_and_action_oriented(self):
+        page = (ROOT / "vita/assets/pairing.html").read_text()
+        self.assertIn("Connect MuseVita", page)
+        self.assertIn("Choose your files", page)
+        self.assertIn("Send securely", page)
+        self.assertIn("Need help?", page)
+        self.assertNotIn("official identity.json", page)
 
     def test_pairing_listener_only_starts_on_setup_page(self):
         source = (ROOT / "vita/src/main.c").read_text()

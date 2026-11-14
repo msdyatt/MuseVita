@@ -390,6 +390,8 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
         release_crypto(transfer);
         return -1;
     }
+    snprintf(transfer->manual_url, sizeof(transfer->manual_url),
+             "http://%s:%d/", info.ip_address, TRANSFER_PORT);
     snprintf(transfer->qr_payload, sizeof(transfer->qr_payload),
              "http://%s:%d/pair?s=%s&k=%s", info.ip_address, TRANSFER_PORT,
              transfer->session_id, transfer->public_key_b64);
@@ -431,6 +433,10 @@ void muse_vita_pairing_transfer_stop(MuseVitaPairingTransfer *transfer) {
 
 const char *muse_vita_pairing_transfer_qr(const MuseVitaPairingTransfer *transfer) {
     return transfer == NULL ? "" : transfer->qr_payload;
+}
+
+const char *muse_vita_pairing_transfer_manual_url(const MuseVitaPairingTransfer *transfer) {
+    return transfer == NULL ? "" : transfer->manual_url;
 }
 
 const char *muse_vita_pairing_transfer_status(const MuseVitaPairingTransfer *transfer) {

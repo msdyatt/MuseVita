@@ -26,6 +26,7 @@ typedef struct MuseVitaPairingTransfer {
     char session_id[17];
     char public_key_b64[96];
     char qr_payload[MUSEVITA_PAIRING_QR_MAX];
+    char manual_url[64];
     char status[96];
     uint8_t public_key[65];
     mbedtls_ecp_group group;
@@ -41,6 +42,7 @@ typedef struct MuseVitaPairingTransfer {
 int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer);
 void muse_vita_pairing_transfer_stop(MuseVitaPairingTransfer *transfer);
 const char *muse_vita_pairing_transfer_qr(const MuseVitaPairingTransfer *transfer);
+const char *muse_vita_pairing_transfer_manual_url(const MuseVitaPairingTransfer *transfer);
 const char *muse_vita_pairing_transfer_status(const MuseVitaPairingTransfer *transfer);
 int muse_vita_pairing_transfer_take(MuseVitaPairingTransfer *transfer,
                                     char *identity, size_t identity_capacity,
