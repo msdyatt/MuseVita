@@ -21,9 +21,12 @@
 #define TRANSFER_AES_TAG_BYTES 16u
 #define TRANSFER_MAX_PLAINTEXT (MUSEVITA_PAIRING_IDENTITY_MAX + MUSEVITA_PAIRING_JSON_MAX + 512u)
 #define TRANSFER_HTML_PATH "app0:/sce_sys/pairing.html"
+#define TRANSFER_CRYPTO_PATH "app0:/sce_sys/pairing-crypto.js"
+#define TRANSFER_ASSET_MAX 131072u
 #define TRANSFER_TTL_US (10ULL * 60ULL * 1000000ULL)
 
 static char transfer_request_buffer[TRANSFER_HEADER_MAX + TRANSFER_BODY_MAX];
+static char transfer_file_buffer[TRANSFER_ASSET_MAX];
 static char transfer_ct_b64[TRANSFER_BODY_MAX];
 static uint8_t transfer_ciphertext[TRANSFER_BODY_MAX];
 static uint8_t transfer_plaintext[TRANSFER_MAX_PLAINTEXT];
@@ -123,29 +126,29 @@ static int send_text(int socket, int status, const char *content_type, const cha
     return sceNetSend(socket, body, (unsigned int)body_size, 0) == (int)body_size ? 0 : -1;
 }
 
-static int send_file(int socket, const char *path) {
-    char body[24576];
+static int send_file(int socket, const char *path, const char *content_type) {
     SceUID fd = sceIoOpen(path, SCE_O_RDONLY, 0);
     int read_size;
     size_t total = 0;
     char header[256];
     int header_size;
     if (fd < 0) return send_text(socket, 404, "text/plain", "Not found");
-    while (total < sizeof(body)) {
-        read_size = sceIoRead(fd, body + total, sizeof(body) - total);
+    while (total < sizeof(transfer_file_buffer)) {
+        read_size = sceIoRead(fd, transfer_file_buffer + total,
+                              sizeof(transfer_file_buffer) - total);
         if (read_size <= 0) break;
         total += (size_t)read_size;
     }
     sceIoClose(fd);
-    if (total == sizeof(body)) return send_text(socket, 500, "text/plain", "Page too large");
+    if (total == sizeof(transfer_file_buffer)) return send_text(socket, 500, "text/plain", "Page too large");
     header_size = snprintf(header, sizeof(header),
-                           "HTTP/1.1 200\r\nContent-Type: text/html; charset=utf-8\r\n"
+                           "HTTP/1.1 200\r\nContent-Type: %s\r\n"
                            "Content-Length: %lu\r\nCache-Control: no-store\r\n"
                            "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
-                           (unsigned long)total);
+                           content_type, (unsigned long)total);
     if (header_size < 0 || (size_t)header_size >= sizeof(header)) return -1;
     if (sceNetSend(socket, header, (unsigned int)header_size, 0) != header_size) return -1;
-    return sceNetSend(socket, body, (unsigned int)total, 0) == (int)total ? 0 : -1;
+    return sceNetSend(socket, transfer_file_buffer, (unsigned int)total, 0) == (int)total ? 0 : -1;
 }
 
 static int decrypt_bundle(MuseVitaPairingTransfer *transfer, const char *body) {
@@ -242,8 +245,10 @@ static int handle_request(MuseVitaPairingTransfer *transfer, int socket) {
                  transfer->session_id, transfer->public_key_b64);
         return send_text(socket, 200, "application/json", response);
     }
+    if (strncmp(method, "GET", 4) == 0 && strncmp(path, "/pairing-crypto.js", 18) == 0)
+        return send_file(socket, TRANSFER_CRYPTO_PATH, "text/javascript; charset=utf-8");
     if (strncmp(method, "GET", 4) == 0 && strncmp(path, "/pair", 5) == 0)
-        return send_file(socket, TRANSFER_HTML_PATH);
+        return send_file(socket, TRANSFER_HTML_PATH, "text/html; charset=utf-8");
     if (strncmp(method, "POST", 4) == 0 && strncmp(path, "/pair/upload", 12) == 0) {
         const char *body = transfer_request_buffer + header_size;
         if (!session_live(transfer) || transfer->consumed || !strstr(path, transfer->session_id) ||

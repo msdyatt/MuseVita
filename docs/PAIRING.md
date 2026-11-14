@@ -45,11 +45,13 @@ After the official host has produced the three files, the Vita can transfer
 them without navigating VitaShell. Connect the Vita and phone to the same
 Wi-Fi, open the MuseVita SETUP page, scan the QR code, select `identity.json`,
 `pairing.json`, and `sdk_token` on the phone, then press SELECT on the Vita.
-The phone page uses WebCrypto ECDH/HKDF-SHA-256/AES-256-GCM against the
-ephemeral public key pinned in the QR URL. The Vita accepts one matching
-session only, keeps the decrypted bundle in memory until SELECT, and then
-stores only the encrypted credential record. The QR never contains a Muse
-access token, refresh token, SDK token, password, or browser cookie.
+The phone page uses browser WebCrypto when available, with a bundled
+pure-JavaScript fallback for local HTTP browsers, using
+ECDH/HKDF-SHA-256/AES-256-GCM against the ephemeral public key pinned in the QR
+URL. The Vita accepts one matching session only, keeps the decrypted bundle in
+memory until SELECT, and then stores only the encrypted credential record. The
+QR never contains a Muse access token, refresh token, SDK token, password, or
+browser cookie.
 
 This is a local-network convenience path, not a replacement for the official
 BLE/account authorization step. Physical phone/Vita validation remains a

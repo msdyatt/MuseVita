@@ -18,6 +18,7 @@ class PairingTransferTests(unittest.TestCase):
 
     def test_phone_page_uses_pinned_standard_web_crypto(self):
         page = (ROOT / "vita/assets/pairing.html").read_text()
+        self.assertIn('src="/pairing-crypto.js"', page)
         self.assertIn("ECDH", page)
         self.assertIn("HKDF", page)
         self.assertIn("AES-GCM", page)
@@ -25,8 +26,17 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("'='.repeat((4-raw.length%4)%4)", page)
         self.assertNotIn("pinned.replaceAll('-','+').replaceAll('_','/')+'=='", page)
         self.assertIn("/pair/upload", page)
+        self.assertIn("MuseVitaCrypto.seal", page)
+        self.assertIn("globalThis.crypto&&globalThis.crypto.subtle", page)
         self.assertNotIn("access_token", page)
         self.assertNotIn("refresh_token", page)
+
+    def test_crypto_fallback_is_packaged_with_the_vpk(self):
+        cmake = (ROOT / "vita/CMakeLists.txt").read_text()
+        self.assertIn("assets/pairing-crypto.js", cmake)
+        source = (ROOT / "vita/src/pairing_transfer.c").read_text()
+        self.assertIn('"/pairing-crypto.js"', source)
+        self.assertIn('"text/javascript; charset=utf-8"', source)
 
 
 if __name__ == "__main__":

@@ -13,7 +13,9 @@ Before any public deployment or real credential transfer:
 2. Keep the browser wizard non-custodial: no tokens or secrets submitted to our web backend. The current Vita import converts the official plaintext pairing file to an authenticated encrypted local blob and deletes the plaintext copy; this is a containment measure, not a substitute for hardware-backed secret storage.
 3. The on-device transfer pins the browser upload to the public key displayed
    in the Vita QR, expires the session after ten minutes, and consumes it after
-   one upload. Before public deployment, add a broader security review of local
+   one upload. The phone page may use its bundled pure-JavaScript crypto
+   fallback when local HTTP prevents WebCrypto; it still sends only the same
+   authenticated encrypted blob. Before public deployment, add a broader security review of local
    network threat assumptions, rate limits, origin checks, HTTPS/HSTS, and
    account/device binding; no service should log secrets or ciphertext.
 4. Test the Vita-side TLS trust root configuration, system clock, certificate hostname verification, WebSocket upgrade and Noise XX with the Meta SDK test vectors. No `verify=False`, hard-coded root credentials or implicit HTTP downgrades.

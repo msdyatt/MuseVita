@@ -9,6 +9,7 @@ build-vita/
 *.sfo
 *.log
 .env
+tools/node_modules/
 pairing.json
 identity.json
 sdk_token

@@ -66,8 +66,9 @@ When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
 with a phone on the same network, choose the three official files, and press
 SELECT on the Vita. The QR contains only a local URL, an expiring session
 reference, and the Vita's ephemeral P-256 public key. The phone encrypts the
-bundle with WebCrypto (ECDH/HKDF-SHA-256/AES-256-GCM); the Vita decrypts and
-validates it locally, then immediately converts it to encrypted app storage.
+bundle with browser WebCrypto when available, or the bundled pure-JavaScript
+fallback, using ECDH/HKDF-SHA-256/AES-256-GCM; the Vita decrypts and validates
+it locally, then immediately converts it to encrypted app storage.
 The local transfer server stops accepting uploads after the first successful
 bundle. This path is source-tested and cross-compiled, but still needs a
 physical phone/Vita transfer test before release claims.

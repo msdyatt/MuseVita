@@ -67,4 +67,5 @@ vita_create_vpk(MuseVita.vpk ${VITA_TITLEID} musevita.self
   NAME "${VITA_APP_NAME}"
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon0.png" sce_sys/icon0.png
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/pairing.html" sce_sys/pairing.html
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/pairing-crypto.js" sce_sys/pairing-crypto.js
 )
