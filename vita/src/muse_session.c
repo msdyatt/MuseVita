@@ -932,13 +932,15 @@ static void consume_history_response(MuseVitaSession *session) {
 }
 
 static int start_history_request(MuseVitaSession *session) {
-    const MuseLinkHeader headers[] = {
-        {"Accept", "application/json"},
-        {"x-app-id", "musegadget"},
-    };
+    char request_id[40];
+    MuseLinkHeader headers[3];
     size_t encoded_size = 0;
     int64_t stream_id;
     if (session == NULL || session->request_active || !session->subscribed) return -1;
+    make_request_id(request_id);
+    headers[0] = (MuseLinkHeader){"Accept", "application/json"};
+    headers[1] = (MuseLinkHeader){"x-request-id", request_id};
+    headers[2] = (MuseLinkHeader){"x-app-id", "musegadget"};
     session->history_requested = true;
     stream_id = session->next_stream_id++;
     begin_request(session, stream_id);
