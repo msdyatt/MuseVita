@@ -16,6 +16,19 @@
 #define MUSEVITA_MAX_FRAME_BYTES (512u * 1024u)
 #define MUSEVITA_MEDIA_BUFFER_BYTES (384u * 1024u)
 #define MUSEVITA_MAX_DEFERRED_CHAT_BYTES (256u * 1024u)
+#define MUSEVITA_MAX_NOISE_ASSEMBLIES 4u
+
+typedef struct MuseVitaNoiseAssembly {
+    bool active;
+    int64_t chunk_id;
+    uint32_t total_chunks;
+    uint32_t received_chunks;
+    size_t total_bytes;
+    uint64_t last_update_us;
+    uint8_t seen[(MUSE_LINK_MAX_NOISE_CHUNKS + 7u) / 8u];
+    uint8_t *chunks[MUSE_LINK_MAX_NOISE_CHUNKS];
+    size_t chunk_sizes[MUSE_LINK_MAX_NOISE_CHUNKS];
+} MuseVitaNoiseAssembly;
 
 typedef enum MuseVitaSessionState {
     MUSEVITA_SESSION_NO_PAIRING = 0,
@@ -44,12 +57,8 @@ typedef struct MuseVitaSession {
     int64_t request_stream_id;
     int64_t next_stream_id;
     int64_t next_chunk_id;
-    uint32_t assembly_total;
-    uint32_t assembly_count;
-    int64_t assembly_chunk_id;
     int64_t last_chat_seq;
     int64_t last_chat_row_seq;
-    size_t assembly_size;
     size_t ws_message_size;
     uint64_t last_ping_us;
     uint64_t retry_after_us;
@@ -82,6 +91,7 @@ typedef struct MuseVitaSession {
     char request_buffer[65536];
     char deferred_chat_buffer[MUSEVITA_MAX_DEFERRED_CHAT_BYTES];
     uint8_t ws_message[MUSEVITA_MAX_WS_MESSAGE_BYTES];
+    MuseVitaNoiseAssembly noise_assemblies[MUSEVITA_MAX_NOISE_ASSEMBLIES];
     uint8_t assembly_buffer[MUSEVITA_MAX_ASSEMBLY_BYTES];
     uint8_t frame_buffer[MUSEVITA_MAX_FRAME_BYTES];
     /* Noise encrypts the serialized transport frame, which can be slightly
