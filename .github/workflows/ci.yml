@@ -31,6 +31,8 @@ jobs:
       - name: Install Vita port libraries
         # Keep the image free of the legacy OpenSSL curl package. The project
         # uses the Vita-compatible mbedTLS-backed curl variant used locally.
+        env:
+          VDPM_NONINTERACTIVE: '1'
         run: vdpm install libvita2d curl-mbedtls
       - name: Configure Vita build
         run: cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
