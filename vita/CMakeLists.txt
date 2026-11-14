@@ -27,6 +27,7 @@ add_executable(musevita
   ../protocol/control_framing.c
   ../protocol/json_extract.c
   ../protocol/link_wire.c
+  ../protocol/noise_framing.c
   ../protocol/noise_xx.c
 )
 target_include_directories(musevita PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../protocol)

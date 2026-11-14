@@ -9,6 +9,7 @@
 #include "chat_state.h"
 #include "control_framing.h"
 #include "link_wire.h"
+#include "noise_framing.h"
 #include "noise_xx.h"
 
 #define MUSEVITA_MAX_WS_MESSAGE_BYTES (512u * 1024u)
@@ -16,20 +17,6 @@
 #define MUSEVITA_MAX_FRAME_BYTES (512u * 1024u)
 #define MUSEVITA_MEDIA_BUFFER_BYTES (384u * 1024u)
 #define MUSEVITA_MAX_DEFERRED_CHAT_BYTES (256u * 1024u)
-#define MUSEVITA_MAX_NOISE_ASSEMBLIES 4u
-
-typedef struct MuseVitaNoiseAssembly {
-    bool active;
-    int64_t chunk_id;
-    uint32_t total_chunks;
-    uint32_t received_chunks;
-    size_t total_bytes;
-    uint64_t last_update_us;
-    uint8_t seen[(MUSE_LINK_MAX_NOISE_CHUNKS + 7u) / 8u];
-    uint8_t *chunks[MUSE_LINK_MAX_NOISE_CHUNKS];
-    size_t chunk_sizes[MUSE_LINK_MAX_NOISE_CHUNKS];
-} MuseVitaNoiseAssembly;
-
 typedef enum MuseVitaSessionState {
     MUSEVITA_SESSION_NO_PAIRING = 0,
     MUSEVITA_SESSION_READY = 1,
@@ -91,7 +78,7 @@ typedef struct MuseVitaSession {
     char request_buffer[65536];
     char deferred_chat_buffer[MUSEVITA_MAX_DEFERRED_CHAT_BYTES];
     uint8_t ws_message[MUSEVITA_MAX_WS_MESSAGE_BYTES];
-    MuseVitaNoiseAssembly noise_assemblies[MUSEVITA_MAX_NOISE_ASSEMBLIES];
+    MuseNoiseFrameDecoder noise_decoder;
     uint8_t assembly_buffer[MUSEVITA_MAX_ASSEMBLY_BYTES];
     uint8_t frame_buffer[MUSEVITA_MAX_FRAME_BYTES];
     /* Noise encrypts the serialized transport frame, which can be slightly

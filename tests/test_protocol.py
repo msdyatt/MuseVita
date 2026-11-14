@@ -148,6 +148,21 @@ class ControlFramingTests(unittest.TestCase):
             self.assertEqual(json.loads(register)["method"], "link.register")
             self.assertEqual(json.loads(chat)["device_id"], "homelink-000001")
 
+    def test_noise_frame_assembler_handles_interleaving_and_expiry(self):
+        compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+        if compiler is None:
+            self.skipTest("no host C compiler available")
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            binary = Path(temp_dir) / "test_noise_framing"
+            subprocess.run(
+                [compiler, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I",
+                 str(root / "protocol"), str(root / "protocol/noise_framing.c"),
+                 str(root / "tests/test_noise_framing.c"), "-o", str(binary)],
+                check=True,
+            )
+            subprocess.run([str(binary)], check=True)
+
     def test_json_extractor_handles_api_and_chat_fields(self):
         compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
         if compiler is None:

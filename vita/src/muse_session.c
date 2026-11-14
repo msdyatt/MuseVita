@@ -1,7 +1,6 @@
 #include "muse_session.h"
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #include <curl/websockets.h>
@@ -28,7 +27,6 @@
 #define MAX_CONTROL_OUTBOUND_MESSAGE_BYTES (256u * 1024u)
 #define CREDENTIAL_MAGIC "MVC1"
 #define CREDENTIAL_PLAINTEXT_BYTES 4096u
-#define NOISE_ASSEMBLY_TTL_US (60ULL * 1000ULL * 1000ULL)
 
 typedef struct ResponseBuffer {
     char *data;
@@ -40,55 +38,6 @@ static void make_identity(MuseVitaSession *session, const char *json, size_t jso
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
 static int delete_file(const char *path);
 static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size);
-
-static void clear_noise_assembly(MuseVitaNoiseAssembly *assembly) {
-    if (assembly == NULL) return;
-    for (size_t i = 0; i < MUSE_LINK_MAX_NOISE_CHUNKS; i++) {
-        free(assembly->chunks[i]);
-        assembly->chunks[i] = NULL;
-    }
-    memset(assembly, 0, sizeof(*assembly));
-}
-
-static void clear_noise_assemblies(MuseVitaSession *session) {
-    if (session == NULL) return;
-    for (size_t i = 0; i < MUSEVITA_MAX_NOISE_ASSEMBLIES; i++)
-        clear_noise_assembly(&session->noise_assemblies[i]);
-}
-
-static void expire_noise_assemblies(MuseVitaSession *session, uint64_t now_us) {
-    for (size_t i = 0; i < MUSEVITA_MAX_NOISE_ASSEMBLIES; i++) {
-        MuseVitaNoiseAssembly *assembly = &session->noise_assemblies[i];
-        if (assembly->active && now_us - assembly->last_update_us > NOISE_ASSEMBLY_TTL_US)
-            clear_noise_assembly(assembly);
-    }
-}
-
-static MuseVitaNoiseAssembly *find_noise_assembly(MuseVitaSession *session, int64_t chunk_id) {
-    for (size_t i = 0; i < MUSEVITA_MAX_NOISE_ASSEMBLIES; i++) {
-        if (session->noise_assemblies[i].active &&
-            session->noise_assemblies[i].chunk_id == chunk_id)
-            return &session->noise_assemblies[i];
-    }
-    return NULL;
-}
-
-static MuseVitaNoiseAssembly *new_noise_assembly(MuseVitaSession *session,
-                                                  int64_t chunk_id, uint32_t total_chunks,
-                                                  uint64_t now_us) {
-    for (size_t i = 0; i < MUSEVITA_MAX_NOISE_ASSEMBLIES; i++) {
-        MuseVitaNoiseAssembly *assembly = &session->noise_assemblies[i];
-        if (!assembly->active) {
-            memset(assembly, 0, sizeof(*assembly));
-            assembly->active = true;
-            assembly->chunk_id = chunk_id;
-            assembly->total_chunks = total_chunks;
-            assembly->last_update_us = now_us;
-            return assembly;
-        }
-    }
-    return NULL;
-}
 
 static int chat_event_is_main_session(const char *line, size_t line_size) {
     char session_id[64];
@@ -202,7 +151,8 @@ static void close_transport(MuseVitaSession *session) {
     session->ws_message_active = false;
     session->ws_text_active = false;
     session->ws_message_size = 0;
-    clear_noise_assemblies(session);
+    muse_noise_frame_decoder_free(&session->noise_decoder);
+    muse_noise_frame_decoder_init(&session->noise_decoder);
     session->last_chat_seq = 0;
     session->last_chat_row_seq = 0;
     session->subscribe_buffer_size = 0;
@@ -1301,8 +1251,9 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
 
 static int process_websocket_message(MuseVitaSession *session, const uint8_t *message, size_t message_size) {
     MuseLinkNoiseFrame frame;
-    MuseVitaNoiseAssembly *assembly;
+    MuseNoiseFrameResult assembly_result;
     uint64_t now_us;
+    size_t assembled_size = 0;
     size_t clear_size = 0;
     if (muse_noise_xx_decrypt(&session->noise, message, message_size,
                               session->frame_buffer, sizeof(session->frame_buffer), &clear_size) != MUSE_NOISE_OK) return -1;
@@ -1310,51 +1261,17 @@ static int process_websocket_message(MuseVitaSession *session, const uint8_t *me
     if (frame.total_chunks == 0 || frame.total_chunks > MUSE_LINK_MAX_NOISE_CHUNKS ||
         frame.chunk_index >= frame.total_chunks ||
         frame.payload_size > MUSE_LINK_MAX_NOISE_CHUNK_BYTES) return -1;
-    if (frame.total_chunks == 1) return process_service_response(session, frame.payload, frame.payload_size);
     now_us = (uint64_t)sceKernelGetSystemTimeWide();
-    expire_noise_assemblies(session, now_us);
-    assembly = find_noise_assembly(session, frame.chunk_id);
-    if (assembly == NULL)
-        assembly = new_noise_assembly(session, frame.chunk_id, frame.total_chunks, now_us);
-    if (assembly == NULL || assembly->total_chunks != frame.total_chunks) {
-        if (assembly != NULL) clear_noise_assembly(assembly);
-        return -1;
-    }
-    if ((assembly->seen[frame.chunk_index / 8u] & (uint8_t)(1u << (frame.chunk_index % 8u))) != 0 ||
-        frame.payload_size > sizeof(session->assembly_buffer) - assembly->total_bytes) {
-        clear_noise_assembly(assembly);
-        return -1;
-    }
-    if (frame.payload_size != 0) {
-        assembly->chunks[frame.chunk_index] = malloc(frame.payload_size);
-        if (assembly->chunks[frame.chunk_index] == NULL) {
-            clear_noise_assembly(assembly);
-            return -1;
-        }
-        memcpy(assembly->chunks[frame.chunk_index], frame.payload, frame.payload_size);
-    }
-    assembly->chunk_sizes[frame.chunk_index] = frame.payload_size;
-    assembly->seen[frame.chunk_index / 8u] |= (uint8_t)(1u << (frame.chunk_index % 8u));
-    assembly->received_chunks++;
-    assembly->total_bytes += frame.payload_size;
-    assembly->last_update_us = now_us;
-    if (assembly->received_chunks != assembly->total_chunks) return 0;
-    {
-        size_t offset = 0;
-        for (uint32_t i = 0; i < assembly->total_chunks; i++) {
-            size_t chunk_size = assembly->chunk_sizes[i];
-            if (chunk_size > sizeof(session->assembly_buffer) - offset ||
-                (chunk_size != 0 && assembly->chunks[i] == NULL)) {
-                clear_noise_assembly(assembly);
-                return -1;
-            }
-            if (chunk_size != 0) memcpy(session->assembly_buffer + offset,
-                                       assembly->chunks[i], chunk_size);
-            offset += chunk_size;
-        }
-        clear_noise_assembly(assembly);
-        return process_service_response(session, session->assembly_buffer, offset);
-    }
+    assembly_result = muse_noise_frame_decoder_feed(&session->noise_decoder,
+                                                    frame.chunk_id, frame.chunk_index,
+                                                    frame.total_chunks, frame.payload,
+                                                    frame.payload_size, now_us,
+                                                    session->assembly_buffer,
+                                                    sizeof(session->assembly_buffer),
+                                                    &assembled_size);
+    if (assembly_result == MUSE_NOISE_FRAME_NEED_MORE) return 0;
+    if (assembly_result != MUSE_NOISE_FRAME_COMPLETE) return -1;
+    return process_service_response(session, session->assembly_buffer, assembled_size);
 }
 
 int muse_vita_session_init(MuseVitaSession *session) {
@@ -1365,6 +1282,7 @@ int muse_vita_session_init(MuseVitaSession *session) {
     session->next_stream_id = 1;
     session->next_chunk_id = 1;
     muse_control_decoder_init(&session->control_decoder);
+    muse_noise_frame_decoder_init(&session->noise_decoder);
     if (ensure_identity(session) != 0) return -1;
     if (curl_global_init(CURL_GLOBAL_DEFAULT) != CURLE_OK) return -1;
     session->curl_initialized = true;
