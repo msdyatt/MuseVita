@@ -8,11 +8,13 @@
 
 #include "chat_state.h"
 #include "control_framing.h"
+#include "link_wire.h"
 #include "noise_xx.h"
 
 #define MUSEVITA_MAX_WS_MESSAGE_BYTES (512u * 1024u)
 #define MUSEVITA_MAX_ASSEMBLY_BYTES (2u * 1024u * 1024u)
 #define MUSEVITA_MAX_FRAME_BYTES (512u * 1024u)
+#define MUSEVITA_MEDIA_BUFFER_BYTES (384u * 1024u)
 
 typedef enum MuseVitaSessionState {
     MUSEVITA_SESSION_NO_PAIRING = 0,
@@ -63,7 +65,13 @@ typedef struct MuseVitaSession {
     uint8_t ws_message[MUSEVITA_MAX_WS_MESSAGE_BYTES];
     uint8_t assembly_buffer[MUSEVITA_MAX_ASSEMBLY_BYTES];
     uint8_t frame_buffer[MUSEVITA_MAX_FRAME_BYTES];
-    uint8_t crypto_buffer[4u * 1024u + 64u];
+    /* A body chunk may use the official 16 KiB link chunk size. Keep the
+       encrypted payload buffer at the full link limit so future media sends
+       cannot fail just because the transport scratch buffer is smaller than
+       the protobuf frame. */
+    uint8_t crypto_buffer[MUSE_LINK_MAX_NOISE_CHUNK_BYTES + 64u];
+    uint8_t media_capture_buffer[MUSEVITA_MEDIA_BUFFER_BYTES];
+    char media_buffer[MUSEVITA_MEDIA_BUFFER_BYTES];
 } MuseVitaSession;
 
 int muse_vita_session_init(MuseVitaSession *session);
@@ -72,6 +80,10 @@ int muse_vita_session_load_pairing(MuseVitaSession *session);
 int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat);
 int muse_vita_session_poll(MuseVitaSession *session);
 int muse_vita_session_send_chat(MuseVitaSession *session, const char *message);
+int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
+                                 const char *item_type, const char *mime_type,
+                                 const char *filename, const uint8_t *data,
+                                 size_t data_size);
 bool muse_vita_session_should_reconnect(const MuseVitaSession *session);
 bool muse_vita_session_is_connected(const MuseVitaSession *session);
 const char *muse_vita_session_label(const MuseVitaSession *session);

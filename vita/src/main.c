@@ -24,6 +24,7 @@
 #include "chat_state.h"
 #include "muse_session.h"
 #include "network_state.h"
+#include "vita_media.h"
 
 #define WHITE RGBA8(246, 246, 248, 255)
 #define MUTED RGBA8(166, 172, 196, 255)
@@ -47,6 +48,7 @@ enum {
 static uint16_t ime_buffer[SCE_IME_DIALOG_MAX_TEXT_LENGTH + 1];
 static bool ime_open;
 static bool app_util_ready;
+static char media_status[96];
 static const SceWChar16 chat_ime_title[] = {
     'M', 'e', 's', 's', 'a', 'g', 'e', ' ', 't', 'o', ' ', 'M', 'u', 's', 'e', 0
 };
@@ -153,6 +155,7 @@ static void draw_chat_page(vita2d_pgf *font, const MuseVitaChatState *chat) {
     } else {
         text(font, 70, 452, 16, MUTED, "X  Type a message");
     }
+    if (media_status[0] != '\0') text(font, 70, 480, 15, MUTED, media_status);
 }
 
 static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
@@ -167,7 +170,7 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
     if (page == PAGE_STATUS) draw_status_page(font, network, session);
     else if (page == PAGE_SETUP) draw_setup_page(font);
     else draw_chat_page(font, chat);
-    text(font, 44, 506, 18, MUTED, page == PAGE_CHAT ? "X  Type  SQUARE  Send" : "X  Next page");
+    text(font, 44, 506, 18, MUTED, page == PAGE_CHAT ? "X Type  SQUARE Send  L Photo  R Voice" : "X  Next page");
     text(font, 230, 506, 18, MUTED, "CIRCLE  Previous");
     text(font, 470, 506, 18, MUTED, "TRIANGLE  Muse Web");
     text(font, 770, 506, 18, MUTED, "START  Exit");
@@ -216,6 +219,38 @@ static void finish_chat_ime(MuseVitaChatState *chat) {
     ime_open = false;
 }
 
+static void capture_and_send_photo(void) {
+    size_t media_size = 0;
+    strcpy(media_status, "Capturing photo...");
+    if (muse_vita_capture_photo_jpeg(muse_session.media_capture_buffer, sizeof(muse_session.media_capture_buffer), &media_size) != 0) {
+        strcpy(media_status, "Camera capture failed.");
+        return;
+    }
+    if (muse_vita_session_send_media(&muse_session, "Please analyze this image.", "image",
+                                     "image/jpeg", "vita-camera.jpg", muse_session.media_capture_buffer,
+                                     media_size) != 0) {
+        strcpy(media_status, "Photo captured, but send failed.");
+        return;
+    }
+    strcpy(media_status, "Photo sent to Muse.");
+}
+
+static void capture_and_send_voice(void) {
+    size_t media_size = 0;
+    strcpy(media_status, "Recording 2-second voice note...");
+    if (muse_vita_capture_voice_wav(muse_session.media_capture_buffer, sizeof(muse_session.media_capture_buffer), &media_size) != 0) {
+        strcpy(media_status, "Microphone capture failed.");
+        return;
+    }
+    if (muse_vita_session_send_media(&muse_session, "Please transcribe this voice note.", "file",
+                                     "audio/wav", "vita-voice.wav", muse_session.media_capture_buffer,
+                                     media_size) != 0) {
+        strcpy(media_status, "Voice note captured, but send failed.");
+        return;
+    }
+    strcpy(media_status, "Voice note sent to Muse.");
+}
+
 static void init_ime(void) {
     if (sceSysmoduleLoadModule(SCE_SYSMODULE_IME) < 0) return;
     SceAppUtilInitParam app_param = {0};
@@ -260,6 +295,7 @@ int main(void) {
     MuseVitaNetworkProvider network_provider = muse_vita_default_network_provider();
     MuseVitaChatState chat;
     muse_vita_chat_init(&chat);
+    media_status[0] = '\0';
     muse_vita_session_init(&muse_session);
     if (muse_vita_session_load_pairing(&muse_session) == 0 && network_ready) {
         (void)muse_vita_session_connect(&muse_session, &chat);
@@ -278,6 +314,10 @@ int main(void) {
         if ((just_pressed & SCE_CTRL_CROSS) && page == PAGE_CHAT) open_chat_ime();
         else if (just_pressed & SCE_CTRL_CROSS) page = (page + 1) % PAGE_COUNT;
         if (just_pressed & SCE_CTRL_CIRCLE) page = (page + PAGE_COUNT - 1) % PAGE_COUNT;
+        if ((just_pressed & SCE_CTRL_LTRIGGER) && page == PAGE_CHAT &&
+            muse_vita_session_is_connected(&muse_session)) capture_and_send_photo();
+        if ((just_pressed & SCE_CTRL_RTRIGGER) && page == PAGE_CHAT &&
+            muse_vita_session_is_connected(&muse_session)) capture_and_send_voice();
         if (just_pressed & SCE_CTRL_TRIANGLE) {
             (void)sceAppMgrLaunchAppByUri(0x20000, MUSEVITA_WEB_URL);
         }

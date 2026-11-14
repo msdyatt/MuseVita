@@ -20,6 +20,7 @@ add_executable(musevita
   src/main.c
   src/chat_state.c
   src/muse_session.c
+  src/vita_media.c
   src/network_state.c
   ../protocol/control_framing.c
   ../protocol/json_extract.c
@@ -40,7 +41,10 @@ target_link_libraries(musevita
   SceSysmodule_stub
   SceCommonDialog_stub
   SceAppUtil_stub
+  SceAudioIn_stub
+  SceCamera_stub
   SceIme_stub
+  SceJpegEnc_stub
   SceKernelThreadMgr_stub
   ${CURL_LIBRARIES}
   zstd

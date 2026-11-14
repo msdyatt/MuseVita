@@ -71,6 +71,17 @@ MuseLinkWireError muse_link_build_chat_request(
     const char *message, const char *node_id,
     char *output, size_t capacity, size_t *output_size);
 
+MuseLinkWireError muse_link_build_chat_media_request(
+    const char *message, const char *node_id, const char *item_type,
+    const char *mime_type, const char *filename,
+    const uint8_t *data, size_t data_size,
+    char *output, size_t capacity, size_t *output_size);
+
+MuseLinkWireError muse_link_build_command_result(
+    const char *request_id, int ok, const char *error,
+    const char *media_type, size_t media_size,
+    char *output, size_t capacity, size_t *output_size);
+
 MuseLinkWireError muse_link_decode_noise_frame(
     const uint8_t *input, size_t input_size, MuseLinkNoiseFrame *frame);
 

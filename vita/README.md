@@ -28,14 +28,18 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 - X: next page; on Chat, open the Vita text composer
 - Circle: previous page
 - Square: send the current Chat draft
+- L: capture a 320x240 JPEG photo and send it to Muse
+- R: record a two-second 16 kHz mono WAV voice note and send it to Muse
 - Triangle: open the web fallback
 - START: exit
 
 ## Current limitations
 
-- On-device BLE pairing, QR scanning, chat history pagination, and
-  camera/microphone capabilities are not implemented yet. Transport reconnect
-  retries after a bounded delay when the imported credentials remain valid.
+- On-device BLE pairing, QR scanning, and chat history pagination are not
+  implemented yet. Camera/microphone capture is implemented but still needs
+  physical Vita testing with an authenticated Muse account. Transport
+  reconnect retries after a bounded delay when the imported credentials remain
+  valid.
 - Cross-runtime Noise fixture tests and validation against a real user-owned
   Muse account on a physical Vita are still required.
 

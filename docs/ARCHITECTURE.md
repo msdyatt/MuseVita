@@ -29,6 +29,9 @@
 - `protocol/chat`: chat send, NDJSON subscription, and streamed event rendering
   are implemented; history pagination remains and transport reconnect now
   retries after a bounded delay
+- `vita/src/vita_media`: bounded one-shot Vita camera/JPEG and microphone/WAV
+  capture paths that send official image/file items through the shared chat
+  stream; physical capture validation remains a release gate
 - `storage/credentials`: one-time plaintext import is converted to an encrypted
   local credential blob; hardware extraction review, revoke, and rotation remain
 - `ui`: chat, text input, pairing QR, status, notifications

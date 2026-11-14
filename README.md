@@ -40,6 +40,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
 | Native chat view, bounded history, and Vita IME composer | Implemented and connected to streamed transport events |
 | Direct chat send/subscribe and streamed replies | Implemented in the native source; account/hardware validation pending |
+| Native photo and voice-note capture | Implemented as bounded Vita camera/JPEG and microphone/WAV send paths; physical capture validation pending |
 | Vita hardware installation/playability | Not tested in this environment |
 
 The VPK is a build artifact, not evidence of a live Muse connection. Do not

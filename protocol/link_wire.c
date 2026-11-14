@@ -7,6 +7,7 @@
 
 #define MAX_LINK_FIELD_BYTES (4u * 1024u * 1024u)
 #define MAX_HTTP_REQUEST_BYTES (64u * 1024u + 4096u)
+#define MAX_BODY_CHUNK_BYTES (16u * 1024u)
 
 static MuseLinkWireError append_string(uint8_t *output, size_t capacity, size_t *offset,
                                        unsigned field, const char *value);
@@ -108,9 +109,9 @@ MuseLinkWireError muse_link_encode_open_stream_request(
 MuseLinkWireError muse_link_encode_body_chunk(
     int64_t stream_id, const uint8_t *body, size_t body_size, int end_body,
     uint8_t *output, size_t capacity, size_t *output_size) {
-    uint8_t chunk[4u * 1024u + 32u];
-    uint8_t frame[4u * 1024u + 64u];
-    uint8_t service_request[4u * 1024u + 96u];
+    uint8_t chunk[MAX_BODY_CHUNK_BYTES + 32u];
+    uint8_t frame[MAX_BODY_CHUNK_BYTES + 64u];
+    uint8_t service_request[MAX_BODY_CHUNK_BYTES + 96u];
     size_t chunk_size = 0;
     size_t frame_size = 0;
     size_t service_size = 0;
@@ -275,7 +276,34 @@ MuseLinkWireError muse_link_build_register_message(
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "node_id", node_id, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "display_name", display_name, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
-        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"muse-gadget-vita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{}}");
+        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"muse-gadget-vita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{\"vita.camera_capture\":{\"description\":\"Capture a 320x240 JPEG photo and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000},\"vita.microphone_record\":{\"description\":\"Record a two-second voice note and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000}}}");
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
+    if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
+    return result;
+}
+
+MuseLinkWireError muse_link_build_command_result(
+    const char *request_id, int ok, const char *error,
+    const char *media_type, size_t media_size,
+    char *output, size_t capacity, size_t *output_size) {
+    size_t offset = 0;
+    MuseLinkWireError result;
+    if (output == NULL || output_size == NULL || request_id == NULL) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    *output_size = 0;
+    result = json_format(output, capacity, &offset, "{\"method\":\"link.result\",\"id\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, request_id);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
+                                                           ok ? ",\"ok\":true" : ",\"ok\":false");
+    if (result == MUSE_LINK_WIRE_OK && ok) {
+        result = json_format(output, capacity, &offset, ",\"payload\":{\"sent\":true,\"media_type\":");
+        if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset,
+                                                               media_type == NULL ? "unknown" : media_type);
+        if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"bytes\":%zu}", media_size);
+    } else if (result == MUSE_LINK_WIRE_OK) {
+        result = json_format(output, capacity, &offset, ",\"error\":");
+        if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset,
+                                                               error == NULL ? "command failed" : error);
+    }
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
@@ -292,6 +320,68 @@ MuseLinkWireError muse_link_build_chat_request(
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"output_modality\":\"text\",\"device_id\":");
     if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, node_id);
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
+    if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
+    return result;
+}
+
+static MuseLinkWireError json_base64(char *output, size_t capacity, size_t *offset,
+                                     const uint8_t *data, size_t data_size) {
+    static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    size_t index = 0;
+    if (data == NULL && data_size != 0) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    while (index < data_size) {
+        uint32_t value = (uint32_t)data[index++] << 16;
+        int have_second = index < data_size;
+        int have_third;
+        if (have_second) value |= (uint32_t)data[index++] << 8;
+        have_third = index < data_size;
+        if (have_third) value |= data[index++];
+        if (*offset + 4 >= capacity) return MUSE_LINK_WIRE_OUTPUT_TOO_SMALL;
+        output[(*offset)++] = alphabet[(value >> 18) & 0x3f];
+        output[(*offset)++] = alphabet[(value >> 12) & 0x3f];
+        output[(*offset)++] = have_second ? alphabet[(value >> 6) & 0x3f] : '=';
+        output[(*offset)++] = have_third ? alphabet[value & 0x3f] : '=';
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+MuseLinkWireError muse_link_build_chat_media_request(
+    const char *message, const char *node_id, const char *item_type,
+    const char *mime_type, const char *filename,
+    const uint8_t *data, size_t data_size,
+    char *output, size_t capacity, size_t *output_size) {
+    size_t offset = 0;
+    int first_item = 1;
+    MuseLinkWireError result;
+    if (output == NULL || output_size == NULL || message == NULL || node_id == NULL ||
+        item_type == NULL || mime_type == NULL || filename == NULL ||
+        (data == NULL && data_size != 0)) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    *output_size = 0;
+    result = json_format(output, capacity, &offset, "{\"message\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, message);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
+                                                            ",\"output_modality\":\"text\",\"device_id\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, node_id);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"items\":[");
+    if (result == MUSE_LINK_WIRE_OK && message[0] != '\0') {
+        result = json_format(output, capacity, &offset, "{\"type\":\"text\",\"text\":");
+        if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, message);
+        if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
+        first_item = 0;
+    }
+    if (result == MUSE_LINK_WIRE_OK && !first_item) {
+        result = json_format(output, capacity, &offset, ",");
+    }
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
+                                                            "{\"type\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, item_type);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"mime_type\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, mime_type);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"filename\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, filename);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, ",\"data_base64\":\"");
+    if (result == MUSE_LINK_WIRE_OK) result = json_base64(output, capacity, &offset, data, data_size);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "\"}]}" );
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
 }

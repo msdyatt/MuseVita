@@ -19,6 +19,8 @@ int main(void) {
     puts(json);
     assert(strstr(json, "link.register") != NULL);
     assert(strstr(json, "homelink-000001") != NULL);
+    assert(strstr(json, "vita.camera_capture") != NULL);
+    assert(strstr(json, "vita.microphone_record") != NULL);
 
     assert(muse_link_build_chat_request("hello", "homelink-000001",
                                        json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
@@ -65,6 +67,22 @@ int main(void) {
                                              large_body, sizeof(large_body), 1,
                                              large_output, sizeof(large_output), &proto_size) == MUSE_LINK_WIRE_OK);
         assert(proto_size > sizeof(large_body));
+    }
+    {
+        static const uint8_t media[] = {0x01, 0x02, 0x03, 0xfa};
+        assert(muse_link_build_chat_media_request("look", "homelink-000001", "image",
+                                                  "image/jpeg", "vita-camera.jpg",
+                                                  media, sizeof(media), json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
+        json[json_size] = '\0';
+        assert(strstr(json, "\"items\":[{\"type\":\"text\"") != NULL);
+        assert(strstr(json, "\"data_base64\":\"AQID+g==\"") != NULL);
+    }
+    {
+        assert(muse_link_build_command_result("invoke-1", 1, NULL, "image", 1234,
+                                              json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
+        json[json_size] = '\0';
+        assert(strstr(json, "\"method\":\"link.result\"") != NULL);
+        assert(strstr(json, "\"bytes\":1234") != NULL);
     }
     return 0;
 }
