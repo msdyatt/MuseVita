@@ -51,6 +51,18 @@ int main(void) {
         assert(frame.chunk_id == 7 && frame.chunk_index == 0 && frame.total_chunks == 1);
         assert(frame.payload_size == 3 && memcmp(frame.payload, "abc", 3) == 0);
     }
+    {
+        static const uint8_t truncated_payload[] = {0x22, 0x03, 'a'};
+        static const uint8_t invalid_index[] = {0x10, 0x02, 0x18, 0x02};
+        MuseLinkNoiseFrame frame;
+        assert(muse_link_decode_noise_frame(truncated_payload, sizeof(truncated_payload), &frame) != MUSE_LINK_WIRE_OK);
+        assert(muse_link_decode_noise_frame(invalid_index, sizeof(invalid_index), &frame) != MUSE_LINK_WIRE_OK);
+    }
+    {
+        static const uint8_t truncated_service[] = {0x0a, 0x01, 0x08};
+        MuseLinkIncoming incoming;
+        assert(muse_link_decode_service_response(truncated_service, sizeof(truncated_service), &incoming) != MUSE_LINK_WIRE_OK);
+    }
 
     {
         const MuseLinkHeader headers[] = {
