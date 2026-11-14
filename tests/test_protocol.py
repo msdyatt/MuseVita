@@ -117,6 +117,69 @@ class ControlFramingTests(unittest.TestCase):
             )
             subprocess.run([str(binary)], check=True)
 
+    def test_c_wire_interoperates_with_official_sdk_envelope_decoders(self):
+        compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+        sdk_src = Path("/tmp/muse-gadget-sdk/linux/src")
+        if compiler is None or not (sdk_src / "musegadget/noise/transport.py").exists():
+            self.skipTest("official Muse SDK checkout is not available")
+        if str(sdk_src) not in sys.path:
+            sys.path.insert(0, str(sdk_src))
+        sdk_deps = Path("/tmp/muse-gadget-deps")
+        if sdk_deps.exists() and str(sdk_deps) not in sys.path:
+            sys.path.insert(0, str(sdk_deps))
+        try:
+            from musegadget.noise.envelope import ResetCode
+            from musegadget.noise.framing import decode_noise_frame
+            from musegadget.noise.transport import decode_request_envelope
+        except ImportError:
+            self.skipTest("official Muse SDK Python dependencies are not available")
+
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            binary = Path(temp_dir) / "test_official_wire_interop"
+            subprocess.run(
+                [compiler, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I",
+                 str(root / "protocol"), str(root / "protocol/link_wire.c"),
+                 str(root / "tests/test_official_wire_interop.c"), "-o", str(binary)],
+                check=True,
+            )
+            lines = subprocess.run([str(binary)], check=True, capture_output=True,
+                                   text=True).stdout.splitlines()
+
+        encoded = dict(line.split(" ", 1) for line in lines)
+        opened = decode_request_envelope(bytes.fromhex(encoded["open"]))
+        self.assertEqual((opened.kind, opened.stream_id), ("request", 1))
+        self.assertEqual((opened.value.verb, opened.value.path, opened.value.end_body),
+                         ("POST", "/link-control", False))
+
+        request = decode_request_envelope(bytes.fromhex(encoded["request"]))
+        self.assertEqual((request.kind, request.stream_id), ("request", 3))
+        self.assertEqual((request.value.verb, request.value.path, request.value.end_body),
+                         ("POST", "/chat/stream", True))
+        self.assertEqual(request.value.body,
+                         b'{"message":"hello","output_modality":"text",'
+                         b'"device_id":"homelink-000001"}')
+        self.assertEqual([(header.key, header.value) for header in request.value.headers], [
+            ("Content-Type", "application/json"),
+            ("x-request-id", "req-1"),
+            ("x-app-id", "musegadget"),
+        ])
+
+        body = decode_request_envelope(bytes.fromhex(encoded["body"]))
+        self.assertEqual((body.kind, body.stream_id, body.value.data, body.value.end_body),
+                         ("body_chunk", 3, b"x", False))
+        body_end = decode_request_envelope(bytes.fromhex(encoded["body_end"]))
+        self.assertEqual((body_end.kind, body_end.stream_id, body_end.value.data,
+                          body_end.value.end_body), ("body_chunk", 3, b"x", True))
+
+        reset = decode_request_envelope(bytes.fromhex(encoded["reset"]))
+        self.assertEqual((reset.kind, reset.stream_id, reset.value.code, reset.value.reason),
+                         ("reset", 7, ResetCode.CANCELLED, "request timeout"))
+
+        noise = decode_noise_frame(bytes.fromhex(encoded["noise"]))
+        self.assertEqual((noise.chunk_id, noise.chunk_index, noise.total_chunks, noise.payload),
+                         (42, 0, 1, b"abc"))
+
     def test_c_wire_builders_emit_parseable_json(self):
         compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
         if compiler is None:
