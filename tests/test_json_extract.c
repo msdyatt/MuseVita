@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdint.h>
 #include <string.h>
 
 #include "json_extract.h"
@@ -11,6 +12,7 @@ int main(void) {
         "\"payload\":{\"text\":\"hello\\nworld\"}}";
     char value[128];
     int boolean = 0;
+    int64_t sequence = 0;
     assert(muse_json_find_string(json, strlen(json), "vm_ws_url", value, sizeof(value)));
     assert(strcmp(value, "wss://vm.example") == 0);
     assert(muse_json_find_string(json, strlen(json), "event", value, sizeof(value)));
@@ -27,6 +29,8 @@ int main(void) {
         assert(next_offset > key_offset);
     }
     assert(muse_json_find_bool(json, strlen(json), "default", &boolean) && boolean == 1);
+    assert(muse_json_find_int64("{\"seq\":42}", 10, "seq", &sequence) && sequence == 42);
+    assert(muse_json_find_int64("{\"seq\":-7}", 10, "seq", &sequence) && sequence == -7);
     assert(muse_json_has_key(json, strlen(json), "payload"));
     assert(!muse_json_has_key(json, strlen(json), "error"));
     {

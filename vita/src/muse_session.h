@@ -47,6 +47,8 @@ typedef struct MuseVitaSession {
     uint32_t assembly_total;
     uint32_t assembly_count;
     int64_t assembly_chunk_id;
+    int64_t last_chat_seq;
+    int64_t last_chat_row_seq;
     size_t assembly_size;
     size_t ws_message_size;
     uint64_t last_ping_us;

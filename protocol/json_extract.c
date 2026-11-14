@@ -1,5 +1,6 @@
 #include "json_extract.h"
 
+#include <stdint.h>
 #include <string.h>
 
 static size_t skip_space(const char *json, size_t size, size_t offset) {
@@ -97,6 +98,44 @@ int muse_json_find_bool(const char *json, size_t json_size, const char *key, int
             *value = 0;
             return 1;
         }
+    }
+    return 0;
+}
+
+int muse_json_find_int64(const char *json, size_t json_size, const char *key, int64_t *value) {
+    size_t key_size;
+    if (json == NULL || key == NULL || value == NULL) return 0;
+    key_size = strlen(key);
+    for (size_t i = 0; i + key_size + 2 < json_size; i++) {
+        size_t offset;
+        int negative = 0;
+        uint64_t magnitude = 0;
+        if (!key_at(json, json_size, i, key, key_size)) continue;
+        offset = skip_space(json, json_size, i + key_size + 2);
+        if (offset >= json_size || json[offset] != ':') continue;
+        offset = skip_space(json, json_size, offset + 1);
+        if (offset < json_size && json[offset] == '-') {
+            negative = 1;
+            offset++;
+        }
+        if (offset >= json_size || json[offset] < '0' || json[offset] > '9') continue;
+        while (offset < json_size && json[offset] >= '0' && json[offset] <= '9') {
+            unsigned digit = (unsigned)(json[offset++] - '0');
+            if (magnitude > (UINT64_MAX - digit) / 10u) {
+                magnitude = UINT64_MAX;
+                break;
+            }
+            magnitude = magnitude * 10u + digit;
+        }
+        if (negative) {
+            if (magnitude > (uint64_t)INT64_MAX + 1u) continue;
+            *value = magnitude == (uint64_t)INT64_MAX + 1u
+                         ? INT64_MIN : -(int64_t)magnitude;
+        } else {
+            if (magnitude > (uint64_t)INT64_MAX) continue;
+            *value = (int64_t)magnitude;
+        }
+        return 1;
     }
     return 0;
 }

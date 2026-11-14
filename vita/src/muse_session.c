@@ -115,6 +115,8 @@ static void close_transport(MuseVitaSession *session) {
     session->ws_message_size = 0;
     session->assembly_size = 0;
     session->assembly_count = 0;
+    session->last_chat_seq = 0;
+    session->last_chat_row_seq = 0;
     session->subscribe_buffer_size = 0;
     session->request_buffer_size = 0;
     session->request_active = false;
@@ -820,6 +822,7 @@ static void consume_chat_line(MuseVitaSession *session, const char *line, size_t
     char identifier[128];
     char parent_identifier[128];
     char text[1024];
+    int64_t sequence = 0;
     int has_identifier = muse_json_find_string(line, line_size, "message_id",
                                                 identifier, sizeof(identifier)) ||
                          muse_json_find_string(line, line_size, "id",
@@ -839,6 +842,14 @@ static void consume_chat_line(MuseVitaSession *session, const char *line, size_t
         return;
     }
     if (!muse_json_find_string(line, line_size, "event", event, sizeof(event))) return;
+    if (muse_json_find_int64(line, line_size, "seq", &sequence)) {
+        int is_message_row = strcmp(event, "message.user") == 0 ||
+                             strcmp(event, "message.assistant") == 0;
+        int64_t *last_sequence = is_message_row ? &session->last_chat_row_seq
+                                                : &session->last_chat_seq;
+        if (sequence <= *last_sequence) return;
+        *last_sequence = sequence;
+    }
     if (has_parent && session->last_user_id[0] != '\0' &&
         strcmp(parent_identifier, session->last_user_id) != 0 &&
         strcmp(parent_identifier, session->active_assistant_id) != 0) return;
