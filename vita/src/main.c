@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include <psp2/appmgr.h>
 #include <psp2/ctrl.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
@@ -27,6 +28,7 @@
 #define SUCCESS RGBA8(111, 214, 160, 255)
 #define MUSEVITA_PGF_BASE_SIZE 32.0f
 #define MUSEVITA_PGF_MIN_SCALE 0.78f
+#define MUSEVITA_WEB_URL "https://muse.ai/"
 
 enum {
     PAGE_STATUS = 0,
@@ -57,6 +59,7 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network) {
     text(font, 70, 314, 19, MUTED, "This build will not simulate a chat session.");
     vita2d_draw_rectangle(70, 347, 820, 60, BORDER);
     text(font, 93, 386, 20, WHITE, "Use SETUP to review one-time pairing requirements");
+    text(font, 70, 438, 18, MUTED, "TRIANGLE opens Muse Web in the Vita browser");
 }
 
 static void draw_setup_page(vita2d_pgf *font) {
@@ -89,8 +92,9 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network) {
     else if (page == PAGE_SETUP) draw_setup_page(font);
     else draw_chat_page(font);
     text(font, 44, 506, 18, MUTED, "X  Next page");
-    text(font, 500, 506, 18, MUTED, "CIRCLE  Previous");
-    text(font, 766, 506, 18, MUTED, "START  Exit");
+    text(font, 230, 506, 18, MUTED, "CIRCLE  Previous");
+    text(font, 470, 506, 18, MUTED, "TRIANGLE  Muse Web");
+    text(font, 770, 506, 18, MUTED, "START  Exit");
     vita2d_end_drawing();
     vita2d_swap_buffers();
 }
@@ -118,6 +122,9 @@ int main(void) {
         if (just_pressed & SCE_CTRL_START) break;
         if (just_pressed & SCE_CTRL_CROSS) page = (page + 1) % PAGE_COUNT;
         if (just_pressed & SCE_CTRL_CIRCLE) page = (page + PAGE_COUNT - 1) % PAGE_COUNT;
+        if (just_pressed & SCE_CTRL_TRIANGLE) {
+            (void)sceAppMgrLaunchAppByUri(0x20000, MUSEVITA_WEB_URL);
+        }
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
