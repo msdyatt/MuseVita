@@ -572,9 +572,9 @@ static int refresh_credentials(MuseVitaSession *session) {
     if (session->sdk_token[0] != '\0') {
         snprintf(request_body, sizeof(request_body),
                  "{\"device_id\":\"%s\",\"sdk_token\":\"%s\"}",
-                 session->device_id, session->sdk_token);
+                 session->node_id, session->sdk_token);
     } else {
-        snprintf(request_body, sizeof(request_body), "{\"device_id\":\"%s\"}", session->device_id);
+        snprintf(request_body, sizeof(request_body), "{\"device_id\":\"%s\"}", session->node_id);
     }
     snprintf(authorization, sizeof(authorization), "Authorization: Bearer hatch_refresh:%s", raw_refresh);
     headers = curl_slist_append(headers, authorization);

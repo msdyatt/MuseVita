@@ -44,6 +44,16 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("return status == 401 ? -2 : -1;", source)
         self.assertIn("forget_pairing(session);", source)
 
+    def test_token_refresh_uses_official_node_id(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        start = source.index("static int refresh_credentials")
+        end = source.index("static int websocket_send", start)
+        refresh = source[start:end]
+        self.assertIn('"{\\"device_id\\":\\"%s\\",\\"sdk_token\\":\\"%s\\"}"', refresh)
+        self.assertIn('session->node_id, session->sdk_token', refresh)
+        self.assertIn('"{\\"device_id\\":\\"%s\\"}"', refresh)
+        self.assertNotIn('session->device_id, session->sdk_token', refresh)
+
     def test_vm_lookup_accepts_official_vm_name_fallback(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
         self.assertIn('"vm_name"', source)
