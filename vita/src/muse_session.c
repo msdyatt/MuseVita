@@ -801,10 +801,10 @@ static void consume_chat_line(MuseVitaSession *session, const char *line, size_t
     }
 }
 
-static void consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size) {
+static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size) {
     if (size > sizeof(session->subscribe_buffer) - session->subscribe_buffer_size) {
         session->subscribe_buffer_size = 0;
-        return;
+        return -1;
     }
     memcpy(session->subscribe_buffer + session->subscribe_buffer_size, bytes, size);
     session->subscribe_buffer_size += size;
@@ -819,6 +819,7 @@ static void consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, s
                 session->subscribe_buffer_size - start);
         session->subscribe_buffer_size -= start;
     }
+    return 0;
 }
 
 static void consume_request_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size,
@@ -865,7 +866,7 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
             if (muse_control_decoder_feed(&session->control_decoder, incoming.body, incoming.body_size,
                                           control_message, session) < 0) return -1;
         } else if (incoming.stream_id == session->subscribe_stream_id) {
-            consume_chat_bytes(session, incoming.body, incoming.body_size);
+            if (consume_chat_bytes(session, incoming.body, incoming.body_size) != 0) return -1;
         } else if (incoming.stream_id == session->request_stream_id &&
                    session->request_active && incoming.kind == MUSE_LINK_INCOMING_BODY_CHUNK) {
             consume_request_bytes(session, incoming.body, incoming.body_size, incoming.end_body);
