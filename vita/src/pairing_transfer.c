@@ -39,8 +39,16 @@ static void set_status(MuseVitaPairingTransfer *transfer, const char *value) {
     transfer->status[sizeof(transfer->status) - 1] = '\0';
 }
 
+static void release_crypto(MuseVitaPairingTransfer *transfer) {
+    mbedtls_ctr_drbg_free(&transfer->drbg);
+    mbedtls_entropy_free(&transfer->entropy);
+    mbedtls_mpi_free(&transfer->private_key);
+    mbedtls_ecp_group_free(&transfer->group);
+}
+
 static int session_live(MuseVitaPairingTransfer *transfer) {
     if (transfer->expires_us != 0 && (uint64_t)sceKernelGetSystemTimeWide() >= transfer->expires_us) {
+        transfer->ready = false;
         set_status(transfer, "QR expired; reopen setup to regenerate it");
         return 0;
     }
@@ -251,7 +259,11 @@ static int transfer_thread(unsigned int args, void *arg) {
     SceNetSockaddrIn address;
     (void)args;
     transfer->listen_socket = sceNetSocket("MuseVitaPair", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, 0);
-    if (transfer->listen_socket < 0) { set_status(transfer, "Phone transfer unavailable"); return 0; }
+    if (transfer->listen_socket < 0) {
+        transfer->ready = false;
+        set_status(transfer, "Phone transfer unavailable");
+        return 0;
+    }
     memset(&address, 0, sizeof(address));
     address.sin_len = sizeof(address);
     address.sin_family = SCE_NET_AF_INET;
@@ -261,6 +273,7 @@ static int transfer_thread(unsigned int args, void *arg) {
         sceNetListen(transfer->listen_socket, 1) < 0) {
         sceNetSocketClose(transfer->listen_socket);
         transfer->listen_socket = -1;
+        transfer->ready = false;
         set_status(transfer, "Phone transfer unavailable");
         return 0;
     }
@@ -301,11 +314,15 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
                                        transfer->public_key, sizeof(transfer->public_key)) != 0 ||
         public_size != sizeof(transfer->public_key)) {
         mbedtls_ecp_point_free(&public_point);
+        release_crypto(transfer);
         return -1;
     }
     mbedtls_ecp_point_free(&public_point);
     uint8_t random[TRANSFER_SESSION_BYTES];
-    if (mbedtls_ctr_drbg_random(&transfer->drbg, random, sizeof(random)) != 0) return -1;
+    if (mbedtls_ctr_drbg_random(&transfer->drbg, random, sizeof(random)) != 0) {
+        release_crypto(transfer);
+        return -1;
+    }
     for (size_t i = 0; i < sizeof(random); i++)
         transfer->session_id[i * 2] = session_alphabet[random[i] >> 3];
     for (size_t i = 0; i < sizeof(random); i++)
@@ -313,18 +330,29 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
     transfer->session_id[16] = '\0';
     transfer->expires_us = (uint64_t)sceKernelGetSystemTimeWide() + TRANSFER_TTL_US;
     if (base64_encode(transfer->public_key, sizeof(transfer->public_key),
-                      transfer->public_key_b64, sizeof(transfer->public_key_b64)) == 0) return -1;
+                      transfer->public_key_b64, sizeof(transfer->public_key_b64)) == 0) {
+        release_crypto(transfer);
+        return -1;
+    }
     memset(&info, 0, sizeof(info));
     if (sceNetCtlInetGetInfo(SCE_NETCTL_INFO_GET_IP_ADDRESS, &info) < 0) {
         set_status(transfer, "Connect Vita to Wi-Fi for QR setup");
-        return 0;
+        release_crypto(transfer);
+        return -1;
     }
     snprintf(transfer->qr_payload, sizeof(transfer->qr_payload),
              "http://%s:%d/pair?s=%s&k=%s", info.ip_address, TRANSFER_PORT,
              transfer->session_id, transfer->public_key_b64);
     transfer->thread = sceKernelCreateThread("MuseVitaPairing", transfer_thread,
                                              0x10000100, 0x10000, 0, 0, NULL);
-    if (transfer->thread < 0 || sceKernelStartThread(transfer->thread, 0, NULL) < 0) return -1;
+    if (transfer->thread < 0 || sceKernelStartThread(transfer->thread, 0, NULL) < 0) {
+        if (transfer->thread >= 0) {
+            sceKernelDeleteThread(transfer->thread);
+            transfer->thread = -1;
+        }
+        release_crypto(transfer);
+        return -1;
+    }
     transfer->ready = true;
     return 0;
 }
@@ -338,10 +366,7 @@ void muse_vita_pairing_transfer_stop(MuseVitaPairingTransfer *transfer) {
         (void)sceKernelWaitThreadEnd(transfer->thread, &status, NULL);
         sceKernelDeleteThread(transfer->thread);
     }
-    mbedtls_ctr_drbg_free(&transfer->drbg);
-    mbedtls_entropy_free(&transfer->entropy);
-    mbedtls_mpi_free(&transfer->private_key);
-    mbedtls_ecp_group_free(&transfer->group);
+    release_crypto(transfer);
     memset(transfer, 0, sizeof(*transfer));
     transfer->listen_socket = -1;
 }
