@@ -127,12 +127,23 @@ static int send_bytes(int socket, const void *data, size_t size) {
 static const char *http_reason(int status) {
     switch (status) {
         case 200: return "OK";
+        case 302: return "Found";
         case 400: return "Bad Request";
         case 403: return "Forbidden";
         case 404: return "Not Found";
         case 500: return "Internal Server Error";
         default: return "Error";
     }
+}
+
+static int send_redirect(int socket, const char *location) {
+    char header[512];
+    int header_size = snprintf(header, sizeof(header),
+                               "HTTP/1.1 302 Found\r\nLocation: %s\r\n"
+                               "Content-Length: 0\r\nCache-Control: no-store\r\n"
+                               "Connection: close\r\n\r\n", location);
+    if (header_size < 0 || (size_t)header_size >= sizeof(header)) return -1;
+    return send_bytes(socket, header, (size_t)header_size);
 }
 
 static int send_text(int socket, int status, const char *content_type, const char *body) {
@@ -259,6 +270,13 @@ static int handle_request(MuseVitaPairingTransfer *transfer, int socket) {
         transfer_request_buffer[request_size] = '\0';
     }
     if (request_size < header_size + content_length) return -1;
+    if (strncmp(method, "GET", 4) == 0 && strcmp(path, "/") == 0) {
+        char location[256];
+        snprintf(location, sizeof(location), "/pair?s=%s&k=%s",
+                 transfer->session_id, transfer->public_key_b64);
+        return session_live(transfer) ? send_redirect(socket, location) :
+                                        send_text(socket, 403, "text/plain", "Invalid or expired session");
+    }
     if (strncmp(method, "GET", 4) == 0 && strncmp(path, "/pair/config", 12) == 0) {
         char response[256];
         if (!session_live(transfer) || !strstr(path, transfer->session_id))

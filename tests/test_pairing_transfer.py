@@ -102,6 +102,12 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('"HTTP/1.1 200 OK\\r\\nContent-Type: %s\\r\\n"', source)
         self.assertIn('case 404: return "Not Found";', source)
 
+    def test_phone_transfer_has_a_short_manual_fallback_url(self):
+        source = (ROOT / "vita/src/pairing_transfer.c").read_text()
+        self.assertIn('strcmp(path, "/") == 0', source)
+        self.assertIn('"HTTP/1.1 302 Found\\r\\nLocation: %s\\r\\n"', source)
+        self.assertIn('"/pair?s=%s&k=%s"', source)
+
     def test_pairing_listener_only_starts_on_setup_page(self):
         source = (ROOT / "vita/src/main.c").read_text()
         self.assertIn("page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE", source)
