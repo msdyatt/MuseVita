@@ -101,6 +101,7 @@ int main(void) {
         return 1;
     }
 
+    bool network_ready = muse_vita_network_init() == 0;
     MuseVitaNetworkProvider network_provider = muse_vita_default_network_provider();
     SceCtrlData pad = {0};
     uint32_t previous = 0;
@@ -112,10 +113,13 @@ int main(void) {
         if (just_pressed & SCE_CTRL_START) break;
         if (just_pressed & SCE_CTRL_CROSS) page = (page + 1) % PAGE_COUNT;
         if (just_pressed & SCE_CTRL_CIRCLE) page = (page + PAGE_COUNT - 1) % PAGE_COUNT;
-        MuseVitaNetworkState network = network_provider.probe(network_provider.context);
+        MuseVitaNetworkState network = network_ready
+                                           ? network_provider.probe(network_provider.context)
+                                           : MUSEVITA_NETWORK_UNKNOWN;
         draw(font, page, network);
         sceKernelDelayThread(16000);
     }
+    if (network_ready) muse_vita_network_term();
     vita2d_free_pgf(font);
     vita2d_fini();
     sceKernelExitProcess(0);
