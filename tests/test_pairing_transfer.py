@@ -44,6 +44,11 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("return status == 401 ? -2 : -1;", source)
         self.assertIn("forget_pairing(session);", source)
 
+    def test_vm_lookup_accepts_official_vm_name_fallback(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        self.assertIn('"vm_name"', source)
+        self.assertIn("strncpy(vm_id, vm_name", source)
+
     def test_chat_events_are_deferred_until_ack_and_bound_to_parent(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
         self.assertIn("awaiting_chat_ack", source)

@@ -417,6 +417,10 @@ static int fetch_vm(MuseVitaSession *session) {
     CURL *curl = curl_easy_init();
     struct curl_slist *headers = NULL;
     char response_data[MAX_HTTP_JSON_BYTES];
+    char noise_host[sizeof(session->noise_host)];
+    char vm_id[sizeof(session->vm_id)];
+    char vm_name[sizeof(session->vm_id)];
+    char vm_auth_token[sizeof(session->vm_auth_token)];
     ResponseBuffer response = {response_data, 0, sizeof(response_data) - 1};
     long status = 0;
     CURLcode result;
@@ -441,24 +445,43 @@ static int fetch_vm(MuseVitaSession *session) {
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
     if (result != CURLE_OK || status < 200 || status >= 300) return status == 401 ? -2 : -1;
+    memset(noise_host, 0, sizeof(noise_host));
+    memset(vm_id, 0, sizeof(vm_id));
+    memset(vm_name, 0, sizeof(vm_name));
+    memset(vm_auth_token, 0, sizeof(vm_auth_token));
     if ((!muse_json_find_string(response_data, response.size, "vm_ws_url",
-                                session->noise_host, sizeof(session->noise_host)) &&
+                                noise_host, sizeof(noise_host)) &&
          !muse_json_find_string(response_data, response.size, "vm_url",
-                                session->noise_host, sizeof(session->noise_host))) ||
-        !muse_json_find_string(response_data, response.size, "vm_id",
-                               session->vm_id, sizeof(session->vm_id)) ||
+                                noise_host, sizeof(noise_host))) ||
         !muse_json_find_string(response_data, response.size, "vm_auth_token",
-                               session->vm_auth_token, sizeof(session->vm_auth_token))) return -1;
-    if (strncmp(session->noise_host, "wss://", 6) == 0) {
-        char host[sizeof(session->noise_host)];
-        const char *start = session->noise_host + 6;
+                               vm_auth_token, sizeof(vm_auth_token)) ||
+        (!muse_json_find_string(response_data, response.size, "vm_id",
+                                vm_id, sizeof(vm_id)) &&
+         !muse_json_find_string(response_data, response.size, "vm_name",
+                                vm_name, sizeof(vm_name)))) return -1;
+    if (vm_id[0] == '\0') {
+        if (vm_name[0] == '\0') return -1;
+        strncpy(vm_id, vm_name, sizeof(vm_id) - 1);
+        vm_id[sizeof(vm_id) - 1] = '\0';
+    }
+    if (noise_host[0] == '\0' || vm_auth_token[0] == '\0') return -1;
+    if (strncmp(noise_host, "wss://", 6) == 0) {
+        char host[sizeof(noise_host)];
+        const char *start = noise_host + 6;
         const char *end = strchr(start, '/');
         size_t length = end ? (size_t)(end - start) : strlen(start);
         if (length == 0 || length >= sizeof(host)) return -1;
         memcpy(host, start, length);
         host[length] = '\0';
-        strcpy(session->noise_host, host);
+        strncpy(noise_host, host, sizeof(noise_host) - 1);
+        noise_host[sizeof(noise_host) - 1] = '\0';
     }
+    strncpy(session->noise_host, noise_host, sizeof(session->noise_host) - 1);
+    session->noise_host[sizeof(session->noise_host) - 1] = '\0';
+    strncpy(session->vm_id, vm_id, sizeof(session->vm_id) - 1);
+    session->vm_id[sizeof(session->vm_id) - 1] = '\0';
+    strncpy(session->vm_auth_token, vm_auth_token, sizeof(session->vm_auth_token) - 1);
+    session->vm_auth_token[sizeof(session->vm_auth_token) - 1] = '\0';
     return 0;
 }
 
