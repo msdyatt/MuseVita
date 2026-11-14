@@ -24,6 +24,8 @@
 #include "chat_state.h"
 #include "muse_session.h"
 #include "network_state.h"
+#include "pairing_transfer.h"
+#include "qrcodegen.h"
 #include "vita_media.h"
 
 #define WHITE RGBA8(255, 255, 255, 255)
@@ -51,10 +53,32 @@ static bool ime_open;
 static bool app_util_ready;
 static char media_status[96];
 static char setup_status[96];
+static uint8_t qr_temp[qrcodegen_BUFFER_LEN_FOR_VERSION(20)];
+static uint8_t qr_code[qrcodegen_BUFFER_LEN_FOR_VERSION(20)];
 static const SceWChar16 chat_ime_title[] = {
     'M', 'e', 's', 's', 'a', 'g', 'e', ' ', 't', 'o', ' ', 'M', 'u', 's', 'e', 0
 };
 static MuseVitaSession muse_session;
+
+static void draw_pairing_qr(const char *payload) {
+    int size;
+    const int module_size = 4;
+    const int quiet_zone = 4;
+    if (payload == NULL || payload[0] == '\0' ||
+        !qrcodegen_encodeText(payload, qr_temp, qr_code, qrcodegen_Ecc_LOW,
+                              1, 20, qrcodegen_Mask_AUTO, true)) return;
+    size = qrcodegen_getSize(qr_code);
+    vita2d_draw_rectangle(692, 224, (size + quiet_zone * 2) * module_size,
+                          (size + quiet_zone * 2) * module_size, WHITE);
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            if (qrcodegen_getModule(qr_code, x, y))
+                vita2d_draw_rectangle(692 + (x + quiet_zone) * module_size,
+                                      224 + (y + quiet_zone) * module_size,
+                                      module_size, module_size, BG);
+        }
+    }
+}
 
 static void text(vita2d_pgf *font, int x, int y, float size, uint32_t color, const char *value) {
     /* vita2d PGF takes a scale multiplier, not a pixel size. */
@@ -87,20 +111,22 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network,
     text(font, 70, 438, 18, MUTED, "TRIANGLE  Open Muse Web");
 }
 
-static void draw_setup_page(vita2d_pgf *font) {
+static void draw_setup_page(vita2d_pgf *font, const MuseVitaPairingTransfer *transfer) {
     text(font, 70, 190, 31, WHITE, "One-time Muse setup");
     vita2d_draw_rectangle(70, 210, 820, 56, CARD);
     text(font, 94, 246, 20, ACCENT, "PAIR ONCE");
     text(font, 270, 246, 19, WHITE, "Then the Vita connects directly over Wi-Fi");
     text(font, 78, 300, 21, WHITE, "1");
-    text(font, 118, 300, 20, WHITE, "Pair the Vita identity with an official BLE host");
+    text(font, 118, 300, 19, WHITE, "Scan after official BLE setup");
     text(font, 78, 340, 21, WHITE, "2");
-    text(font, 118, 340, 20, WHITE, "Copy identity, pairing, and SDK token files");
+    text(font, 118, 340, 18, WHITE, "Choose identity.json, pairing.json, sdk_token");
     text(font, 78, 380, 21, WHITE, "3");
-    text(font, 118, 380, 20, WHITE, "Press SELECT to import and connect");
+    text(font, 118, 380, 19, WHITE, "Press SELECT to import and connect");
     vita2d_draw_rectangle(70, 402, 820, 42, CARD);
-    text(font, 94, 430, 18, MUTED, "Bluetooth is needed only during provisioning.");
+    text(font, 94, 430, 17, MUTED, "Encrypted locally • one-time transfer • no bridge");
+    draw_pairing_qr(muse_vita_pairing_transfer_qr(transfer));
     if (setup_status[0] != '\0') text(font, 70, 466, 16, MUTED, setup_status);
+    else text(font, 70, 466, 16, MUTED, muse_vita_pairing_transfer_status(transfer));
 }
 
 static int draw_wrapped(vita2d_pgf *font, int x, int y, int max_chars, int max_lines,
@@ -167,7 +193,8 @@ static void draw_chat_page(vita2d_pgf *font, const MuseVitaChatState *chat) {
 }
 
 static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
-                 const MuseVitaChatState *chat, const MuseVitaSession *session) {
+                 const MuseVitaChatState *chat, const MuseVitaSession *session,
+                 const MuseVitaPairingTransfer *transfer) {
     vita2d_start_drawing();
     vita2d_clear_screen();
     vita2d_draw_rectangle(0, 0, 960, 544, BG);
@@ -176,7 +203,7 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
     vita2d_draw_rectangle(42, 138, 876, 315, PANEL);
     vita2d_draw_rectangle(42, 138, 6, 315, ACCENT);
     if (page == PAGE_STATUS) draw_status_page(font, network, session);
-    else if (page == PAGE_SETUP) draw_setup_page(font);
+    else if (page == PAGE_SETUP) draw_setup_page(font, transfer);
     else draw_chat_page(font, chat);
     text(font, 44, 506, 16, MUTED, page == PAGE_CHAT ? "X Type  □ Send  L Photo  R Voice" : "X Next page");
     text(font, 230, 506, 16, MUTED, "○ Previous");
@@ -306,6 +333,10 @@ int main(void) {
     media_status[0] = '\0';
     setup_status[0] = '\0';
     muse_vita_session_init(&muse_session);
+    static MuseVitaPairingTransfer pairing_transfer;
+    memset(&pairing_transfer, 0, sizeof(pairing_transfer));
+    pairing_transfer.listen_socket = -1;
+    bool pairing_transfer_started = false;
     if (muse_vita_session_load_pairing(&muse_session) == 0 && network_ready) {
         (void)muse_vita_session_connect(&muse_session, &chat);
     }
@@ -331,10 +362,18 @@ int main(void) {
             (void)sceAppMgrLaunchAppByUri(0x20000, MUSEVITA_WEB_URL);
         }
         if ((just_pressed & SCE_CTRL_SELECT) && page == PAGE_SETUP) {
-            if (muse_vita_session_load_pairing(&muse_session) == 0) {
+            char identity[MUSEVITA_PAIRING_IDENTITY_MAX];
+            char pairing[MUSEVITA_PAIRING_JSON_MAX];
+            char sdk_token[MUSEVITA_PAIRING_TOKEN_MAX];
+            if (muse_vita_pairing_transfer_take(&pairing_transfer, identity, sizeof(identity),
+                                                pairing, sizeof(pairing), sdk_token, sizeof(sdk_token)) == 0 &&
+                muse_vita_session_import_pairing(&muse_session, identity, strlen(identity),
+                                                 pairing, strlen(pairing), sdk_token) == 0) {
+                strcpy(setup_status, "Encrypted pairing imported; connecting...");
+            } else if (muse_vita_session_load_pairing(&muse_session) == 0) {
                 strcpy(setup_status, "Pairing imported; connecting...");
             } else {
-                strcpy(setup_status, "No valid pairing bundle found.");
+                strcpy(setup_status, "No received or local pairing bundle found.");
             }
         }
         if ((just_pressed & SCE_CTRL_SQUARE) && page == PAGE_CHAT && chat.draft_ready &&
@@ -344,16 +383,20 @@ int main(void) {
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
+        if (network == MUSEVITA_NETWORK_ONLINE && !pairing_transfer_started) {
+            pairing_transfer_started = muse_vita_pairing_transfer_start(&pairing_transfer) == 0;
+        }
         if (network == MUSEVITA_NETWORK_ONLINE &&
             (muse_vita_session_should_connect(&muse_session) ||
              muse_vita_session_should_reconnect(&muse_session))) {
             (void)muse_vita_session_connect(&muse_session, &chat);
         }
-        draw(font, page, network, &chat, &muse_session);
+        draw(font, page, network, &chat, &muse_session, &pairing_transfer);
         if (ime_open) (void)vita2d_common_dialog_update();
         sceKernelDelayThread(16000);
     }
     term_ime();
+    if (pairing_transfer_started) muse_vita_pairing_transfer_stop(&pairing_transfer);
     muse_vita_session_term(&muse_session);
     if (network_ready) muse_vita_network_term();
     vita2d_free_pgf(font);

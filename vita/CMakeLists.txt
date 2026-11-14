@@ -22,6 +22,8 @@ add_executable(musevita
   src/muse_session.c
   src/vita_media.c
   src/network_state.c
+  src/pairing_transfer.c
+  src/qrcodegen.c
   ../protocol/control_framing.c
   ../protocol/json_extract.c
   ../protocol/link_wire.c
@@ -61,4 +63,5 @@ vita_create_vpk(MuseVita.vpk ${VITA_TITLEID} musevita.self
   VERSION ${VITA_VERSION}
   NAME "${VITA_APP_NAME}"
   FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon0.png" sce_sys/icon0.png
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/pairing.html" sce_sys/pairing.html
 )

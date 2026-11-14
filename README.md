@@ -33,7 +33,8 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | VitaSDK/CMake packaging | Built with VitaSDK 2026.08 and `libvita2d` |
 | Shared control-stream framing, link wire builders, and decoders | Implemented and host-tested |
 | Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime fixture still pending |
-| Local QR setup page | Demo only; local-development use |
+| On-device QR pairing transfer | Implemented in the Vita build: one-time local HTTP page, QR session/key pinning, browser WebCrypto encryption; physical-phone validation pending |
+| Local QR setup page | Development-only demo remains separate from the on-device transfer |
 | Approved Meta pairing and one-time transfer | Official pairing-state import implemented; on-device BLE pairing is not |
 | Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
 | HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
@@ -59,6 +60,16 @@ imports the official access and refresh tokens plus SDK token into
 thereafter. The Vita does not currently perform the BLE peripheral pairing
 step itself; the one-time BLE pairing must be completed by a supported host
 using the same identity before these files are moved to the Vita.
+
+When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
+with a phone on the same network, choose the three official files, and press
+SELECT on the Vita. The QR contains only a local URL, an expiring session
+reference, and the Vita's ephemeral P-256 public key. The phone encrypts the
+bundle with WebCrypto (ECDH/HKDF-SHA-256/AES-256-GCM); the Vita decrypts and
+validates it locally, then immediately converts it to encrypted app storage.
+The local transfer server stops accepting uploads after the first successful
+bundle. This path is source-tested and cross-compiled, but still needs a
+physical phone/Vita transfer test before release claims.
 
 ## Build the Vita application
 

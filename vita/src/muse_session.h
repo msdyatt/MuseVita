@@ -77,6 +77,9 @@ typedef struct MuseVitaSession {
 int muse_vita_session_init(MuseVitaSession *session);
 void muse_vita_session_term(MuseVitaSession *session);
 int muse_vita_session_load_pairing(MuseVitaSession *session);
+int muse_vita_session_import_pairing(MuseVitaSession *session, const char *identity_json,
+                                     size_t identity_size, const char *pairing_json,
+                                     size_t pairing_size, const char *sdk_token);
 int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat);
 int muse_vita_session_poll(MuseVitaSession *session);
 int muse_vita_session_send_chat(MuseVitaSession *session, const char *message);

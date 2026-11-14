@@ -323,6 +323,24 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
     return 0;
 }
 
+int muse_vita_session_import_pairing(MuseVitaSession *session, const char *identity_json,
+                                     size_t identity_size, const char *pairing_json,
+                                     size_t pairing_size, const char *sdk_token) {
+    if (session == NULL || identity_json == NULL || pairing_json == NULL || sdk_token == NULL ||
+        identity_size == 0 || pairing_size == 0 || strlen(sdk_token) == 0 ||
+        strlen(sdk_token) >= sizeof(session->sdk_token)) return -1;
+    if (!muse_json_find_string(pairing_json, pairing_size, "access_token",
+                               session->access_token, sizeof(session->access_token)) ||
+        !muse_json_find_string(pairing_json, pairing_size, "refresh_token",
+                               session->refresh_token, sizeof(session->refresh_token))) return -1;
+    if (write_file(IDENTITY_PATH, identity_json, identity_size) != 0) return -1;
+    make_identity(session, identity_json, identity_size);
+    strcpy(session->sdk_token, sdk_token);
+    if (save_encrypted_credentials(session) != 0) return -1;
+    session->state = MUSEVITA_SESSION_READY;
+    return 0;
+}
+
 static int fetch_vm(MuseVitaSession *session) {
     CURL *curl = curl_easy_init();
     struct curl_slist *headers = NULL;
