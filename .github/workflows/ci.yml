@@ -32,7 +32,9 @@ jobs:
         # The full image also carries the legacy OpenSSL curl package. The
         # local release build uses curl-mbedtls, which has the Vita-compatible
         # static dependency set required by this project.
-        run: vdpm install curl-mbedtls
+        run: |
+          vdpm remove curl || true
+          vdpm install curl-mbedtls
       - name: Configure Vita build
         run: cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
       - name: Build VPK
