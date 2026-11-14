@@ -693,19 +693,35 @@ static int websocket_receive(MuseVitaSession *session, int blocking, size_t *mes
 }
 
 static int send_noise_payload(MuseVitaSession *session, const uint8_t *payload, size_t payload_size) {
-    size_t frame_size = 0;
-    size_t ciphertext_size = 0;
-    MuseLinkWireError wire_result;
-    if (payload_size > MUSE_LINK_MAX_NOISE_CHUNK_BYTES) return -1;
-    if (muse_noise_xx_encrypt(&session->noise, payload, payload_size,
-                              session->crypto_buffer, sizeof(session->crypto_buffer),
-                              &ciphertext_size) != MUSE_NOISE_OK) return -1;
-    wire_result = muse_link_encode_noise_frame(session->next_chunk_id++, 0, 1,
-                                               session->crypto_buffer, ciphertext_size,
-                                               session->frame_buffer, sizeof(session->frame_buffer),
-                                               &frame_size);
-    if (wire_result != MUSE_LINK_WIRE_OK) return -1;
-    return websocket_send(session->curl, session->frame_buffer, frame_size);
+    size_t total_chunks;
+    int64_t chunk_id;
+    if (session == NULL || (payload == NULL && payload_size != 0)) return -1;
+    total_chunks = payload_size == 0 ? 1u :
+                   (payload_size + MUSE_LINK_MAX_NOISE_CHUNK_BYTES - 1u) /
+                   MUSE_LINK_MAX_NOISE_CHUNK_BYTES;
+    if (total_chunks > MUSE_LINK_MAX_NOISE_CHUNKS) return -1;
+    chunk_id = session->next_chunk_id++;
+    for (size_t index = 0; index < total_chunks; index++) {
+        size_t offset = index * MUSE_LINK_MAX_NOISE_CHUNK_BYTES;
+        size_t chunk_size = payload_size - offset;
+        size_t frame_size = 0;
+        size_t ciphertext_size = 0;
+        MuseLinkWireError wire_result;
+        if (chunk_size > MUSE_LINK_MAX_NOISE_CHUNK_BYTES) chunk_size = MUSE_LINK_MAX_NOISE_CHUNK_BYTES;
+        /* The official SDK applies the Noise cipher to the serialized
+           NoiseTransportFrame, not to the service payload inside it. */
+        wire_result = muse_link_encode_noise_frame(chunk_id, (uint32_t)index,
+                                                   (uint32_t)total_chunks,
+                                                   payload == NULL ? NULL : payload + offset,
+                                                   chunk_size, session->frame_buffer,
+                                                   sizeof(session->frame_buffer), &frame_size);
+        if (wire_result != MUSE_LINK_WIRE_OK ||
+            muse_noise_xx_encrypt(&session->noise, session->frame_buffer, frame_size,
+                                  session->crypto_buffer, sizeof(session->crypto_buffer),
+                                  &ciphertext_size) != MUSE_NOISE_OK ||
+            websocket_send(session->curl, session->crypto_buffer, ciphertext_size) != 0) return -1;
+    }
+    return 0;
 }
 
 static int send_link_payload(MuseVitaSession *session, const uint8_t *payload, size_t payload_size) {

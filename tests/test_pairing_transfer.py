@@ -66,6 +66,18 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("sent > size - offset", source)
         self.assertIn("Control frames may appear between fragments", source)
 
+    def test_noise_send_encrypts_serialized_frame(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        start = source.index("static int send_noise_payload")
+        end = source.index("static int send_link_payload", start)
+        function = source[start:end]
+        self.assertIn("total_chunks", function)
+        self.assertIn("MUSE_LINK_MAX_NOISE_CHUNKS", function)
+        frame_position = function.index("muse_link_encode_noise_frame")
+        encrypt_position = function.index("muse_noise_xx_encrypt")
+        self.assertLess(frame_position, encrypt_position)
+        self.assertIn("payload == NULL ? NULL : payload + offset", function)
+
     def test_pairing_listener_only_starts_on_setup_page(self):
         source = (ROOT / "vita/src/main.c").read_text()
         self.assertIn("page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE", source)

@@ -84,10 +84,8 @@ typedef struct MuseVitaSession {
     uint8_t ws_message[MUSEVITA_MAX_WS_MESSAGE_BYTES];
     uint8_t assembly_buffer[MUSEVITA_MAX_ASSEMBLY_BYTES];
     uint8_t frame_buffer[MUSEVITA_MAX_FRAME_BYTES];
-    /* A body chunk may use the official 16 KiB link chunk size. Keep the
-       encrypted payload buffer at the full link limit so future media sends
-       cannot fail just because the transport scratch buffer is smaller than
-       the protobuf frame. */
+    /* Noise encrypts the serialized transport frame, which can be slightly
+       larger than the official plaintext link chunk limit. */
     uint8_t crypto_buffer[MUSE_LINK_MAX_NOISE_CHUNK_BYTES + 64u];
     uint8_t media_capture_buffer[MUSEVITA_MEDIA_BUFFER_BYTES];
     char media_buffer[MUSEVITA_MEDIA_BUFFER_BYTES];
