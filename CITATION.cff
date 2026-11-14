@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "If you use Muse Vita in academic work, please cite this repository."
+title: "Muse Vita"
+authors:
+  - family-names: "Dyatt"
+    given-names: "Sam"
+    affiliation: "Independent developer"
+repository-code: "https://github.com/msdyatt/muse-vita"
+license: "MIT"

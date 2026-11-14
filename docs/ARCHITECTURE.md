@@ -1,0 +1,41 @@
+# Architecture and protocol implementation notes
+
+## Target
+
+- Device: PlayStation Vita running approved homebrew ecosystem / VitaSDK app
+- Model: one-time provisioning, then **direct client**; no persistent gateway
+- Local networking: Vita Wi-Fi -> Meta Muse API/VM
+- Distribution: user-supplied SDK token; no account credential collection on our public site
+
+## Muse transport (documented SDK behavior)
+
+1. Initial authorization is currently BLE-based via Muse mobile application and `pairing_client_hello` / `pairing_encrypted` / `provision_v2` exchanges.
+2. Community pairing v5 includes P-256 ECDH, HKDF-SHA256 and AES-256-GCM. The SDK obtains device access/refresh credentials and VM info. SDK tokens must be user-owned.
+3. Paired gadget fetches its VM and connects to `wss://<noise_host>/v1/noise?vm_id=<id>` with a per-VM bearer; upgrade is followed by Noise XX session establishment.
+4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages and `/chat/subscribe` for live events; `/chat/history` supports history reads. See Linux SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
+5. Token lifecycle includes refresh and reconnection; temporary setup hosts must shut down before Vita uses the same persistent identity to avoid concurrent active sessions.
+
+**Do not guess any cryptographic framing from this document.** Port the SDK's exact fixture-tested behavior. Inspect `linux/tests/vectors/` and `linux/tests/test_link_client.py` in the current SDK source, and validate with the real service before shipping.
+
+## Vita implementation modules (planned)
+
+- `platform/vita_http`: TLS certificate validation, WebSocket client, correct time, network state
+- `protocol/noise_xx`: interoperable Noise XX, keys, transcript and test vectors
+- `protocol/link`: stream framing, register/invoke/result, reconnect
+- `protocol/chat`: send message, subscribe, parse events, history, sync
+- `storage/credentials`: local private encrypted credential storage, rotation and revoke
+- `ui`: chat, text input, pairing QR, status, notifications
+
+No such modules are falsely represented as built in the initial prototype.
+
+## Why the QR does NOT itself authorize Muse
+
+The user-facing QR carries a temporary session reference, not a Muse account token. Current Muse mobile pairing requires BLE device advertisement and interactive confirmation; Web Bluetooth in ordinary browsers does not implement this peripheral role. Browser-to-website sessions cannot mint legitimate gadget tokens or device credentials just by generating a QR code. A one-time pairing helper is needed unless Meta officially adds QR/OAuth device provisioning.
+
+## One-time helper
+
+Prefer an audited OS-native BLE helper for macOS/Windows/Linux with the official flow, no embedded SDK token, and explicit confirmation. Start by proving compatible pairing on a platform that can advertise BLE; transfer state only after successful pairing, then stop/unpair the helper locally. Distribution of such a utility must follow Meta's SDK terms.
+
+## Transfer design for future milestone
+
+Vita should generate an ephemeral receiver key pair and show `session_id` plus public key in a QR. Pairing helper verifies the session and user confirmation, encrypts only for that Vita's public key and uploads ciphertext to a short-lived relay. Vita downloads ciphertext and decrypts locally. Enforce single redemption, expiry, rate limits, origin checks, HTTPS/HSTS and no logs of secrets or ciphertext. Do not use ad hoc crypto or put an access/refresh token in a QR.

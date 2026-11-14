@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+.pytest_cache/
+build-vita/
+*.vpk
+*.self
+*.elf
+*.velf
+*.sfo
+*.log
+.env
+pairing.json
+identity.json
+sdk_token
+*.pem
+*.key

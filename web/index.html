@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>Muse Vita | Pair a PS Vita</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main class="shell">
+    <header class="topline"><div class="brand"><span class="glyph">✦</span> MUSE <span class="thin">/</span> VITA</div><span class="edition">COMMUNITY PROJECT · DEVELOPMENT PREVIEW</span></header>
+    <section class="hero"><p class="eyebrow">A CLASSIC CONSOLE. A MODERN AGENT.</p><h1>Put Muse in your <em>pocket.</em></h1><p>We're building a native, direct-to-Muse homebrew app for PlayStation Vita. Here's a preview of our QR onboarding experience.</p></section>
+    <div class="banner" role="status"><strong>Prototype only.</strong> This site creates disposable QR setup sessions. It cannot authorize your Muse account, deliver credentials, or finish pairing yet. Never paste your SDK token or Muse credentials here.</div>
+    <div class="columns">
+      <section class="panel steps"><div class="sectionnum">01 / START</div><h2>Get ready</h2><ol><li>Install the Vita app when a tested VPK release is available.</li><li>Use your own <a href="https://gadgets.muse.ai/settings/sdk-tokens" target="_blank" rel="noopener noreferrer">Muse Gadget SDK token</a> in Meta's approved pairing flow.</li><li>Use a one-time pairing utility to authorize the handheld.</li><li>After provisioning, the Vita should connect directly via Wi-Fi.</li></ol><p class="fine">We don't host a credential collection form. Future versions will use end-to-end encrypted transfer.</p></section>
+      <section class="panel pair"><div class="sectionnum">02 / QR SESSION DEMO</div><h2>Setup session</h2><p class="sub">A short-lived link for testing phone-to-desktop handoff. The URL contains no Muse secrets.</p><div id="empty" class="placeholder"><div class="scanlines">▦</div><p>No session yet</p><span>Create one to see the QR flow.</span></div><div id="session" class="session hidden"><img id="qr" alt="QR code linking to this demonstration session"><p class="code" id="code"></p><p id="expiry" class="fine"></p><div class="sessionstate"><span class="dot"></span><span id="state">Waiting</span></div><button id="copy" class="secondary" type="button">Copy link</button></div><button id="create" class="primary" type="button">Create demo QR session</button><p id="notice" class="fine" aria-live="polite"></p></section>
+    </div>
+    <footer><span>UNOFFICIAL • NOT AFFILIATED WITH META</span><span>No credentials collected · <a href="https://github.com/facebookincubator/muse-gadget-sdk" target="_blank" rel="noopener noreferrer">Protocol reference</a></span></footer>
+  </main>
+</body>
+</html>
