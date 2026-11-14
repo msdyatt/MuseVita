@@ -30,6 +30,7 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 - Square: send the current Chat draft
 - L: capture a 320x240 JPEG photo and send it to Muse
 - R: record a two-second 16 kHz mono WAV voice note and send it to Muse
+- Select: reload the official pairing bundle on the Setup page
 - Triangle: open the web fallback
 - START: exit
 

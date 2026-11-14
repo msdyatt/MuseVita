@@ -49,6 +49,7 @@ static uint16_t ime_buffer[SCE_IME_DIALOG_MAX_TEXT_LENGTH + 1];
 static bool ime_open;
 static bool app_util_ready;
 static char media_status[96];
+static char setup_status[96];
 static const SceWChar16 chat_ime_title[] = {
     'M', 'e', 's', 's', 'a', 'g', 'e', ' ', 't', 'o', ' ', 'M', 'u', 's', 'e', 0
 };
@@ -93,6 +94,7 @@ static void draw_setup_page(vita2d_pgf *font) {
     text(font, 70, 344, 19, MUTED, "Bluetooth is needed only during provisioning.");
     vita2d_draw_rectangle(70, 370, 820, 44, BORDER);
     text(font, 93, 399, 18, WARNING, "Pairing transport is not active yet.");
+    if (setup_status[0] != '\0') text(font, 70, 445, 16, MUTED, setup_status);
 }
 
 static int draw_wrapped(vita2d_pgf *font, int x, int y, int max_chars, int max_lines,
@@ -173,7 +175,7 @@ static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
     text(font, 44, 506, 18, MUTED, page == PAGE_CHAT ? "X Type  SQUARE Send  L Photo  R Voice" : "X  Next page");
     text(font, 230, 506, 18, MUTED, "CIRCLE  Previous");
     text(font, 470, 506, 18, MUTED, "TRIANGLE  Muse Web");
-    text(font, 770, 506, 18, MUTED, "START  Exit");
+    text(font, 700, 506, 18, MUTED, page == PAGE_SETUP ? "SELECT Reload" : "START Exit");
     vita2d_end_drawing();
     vita2d_swap_buffers();
 }
@@ -296,6 +298,7 @@ int main(void) {
     MuseVitaChatState chat;
     muse_vita_chat_init(&chat);
     media_status[0] = '\0';
+    setup_status[0] = '\0';
     muse_vita_session_init(&muse_session);
     if (muse_vita_session_load_pairing(&muse_session) == 0 && network_ready) {
         (void)muse_vita_session_connect(&muse_session, &chat);
@@ -304,6 +307,7 @@ int main(void) {
     SceCtrlData pad = {0};
     uint32_t previous = 0;
     int page = PAGE_STATUS;
+    bool reload_pairing = false;
     while (true) {
         sceCtrlPeekBufferPositive(0, &pad, 1);
         uint32_t just_pressed = pad.buttons & ~previous;
@@ -321,6 +325,14 @@ int main(void) {
         if (just_pressed & SCE_CTRL_TRIANGLE) {
             (void)sceAppMgrLaunchAppByUri(0x20000, MUSEVITA_WEB_URL);
         }
+        if ((just_pressed & SCE_CTRL_SELECT) && page == PAGE_SETUP) {
+            reload_pairing = true;
+            if (muse_vita_session_load_pairing(&muse_session) == 0) {
+                strcpy(setup_status, "Pairing imported; connecting...");
+            } else {
+                strcpy(setup_status, "No valid pairing bundle found.");
+            }
+        }
         if ((just_pressed & SCE_CTRL_SQUARE) && page == PAGE_CHAT && chat.draft_ready &&
             muse_vita_session_send_chat(&muse_session, chat.draft) == 0) {
             muse_vita_chat_clear_draft(&chat);
@@ -328,7 +340,11 @@ int main(void) {
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
-        if (network == MUSEVITA_NETWORK_ONLINE && muse_vita_session_should_reconnect(&muse_session)) {
+        if (reload_pairing && network == MUSEVITA_NETWORK_ONLINE &&
+            muse_vita_session_label(&muse_session)[0] == 'P') {
+            reload_pairing = false;
+            (void)muse_vita_session_connect(&muse_session, &chat);
+        } else if (network == MUSEVITA_NETWORK_ONLINE && muse_vita_session_should_reconnect(&muse_session)) {
             (void)muse_vita_session_connect(&muse_session, &chat);
         }
         draw(font, page, network, &chat, &muse_session);
