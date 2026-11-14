@@ -38,6 +38,7 @@ typedef struct MuseVitaSession {
     bool ws_message_active;
     int64_t control_stream_id;
     int64_t subscribe_stream_id;
+    int64_t request_stream_id;
     int64_t next_stream_id;
     int64_t next_chunk_id;
     uint32_t assembly_total;
@@ -49,8 +50,13 @@ typedef struct MuseVitaSession {
     uint64_t retry_after_us;
     size_t subscribe_buffer_size;
     size_t request_buffer_size;
+    int request_status;
+    bool request_active;
+    bool request_done;
+    bool request_failed;
     char active_assistant_id[128];
     char last_user_id[128];
+    char register_request_id[40];
     char access_token[2048];
     char refresh_token[2048];
     char sdk_token[256];

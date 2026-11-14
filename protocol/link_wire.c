@@ -276,7 +276,7 @@ MuseLinkWireError muse_link_build_register_message(
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "node_id", node_id, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "display_name", display_name, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
-        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"muse-gadget-vita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{\"vita.camera_capture\":{\"description\":\"Capture a 320x240 JPEG photo and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000},\"vita.microphone_record\":{\"description\":\"Record a two-second voice note and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000}}}");
+        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"musevita-psvita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{\"device.guide\":{\"description\":\"Describe MuseVita capabilities and controls.\",\"required\":{},\"optional\":{},\"timeout_ms\":5000},\"vita.camera_capture\":{\"description\":\"Capture a 320x240 JPEG photo and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000},\"vita.microphone_record\":{\"description\":\"Record a two-second voice note and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000}}}");
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
@@ -305,6 +305,28 @@ MuseLinkWireError muse_link_build_command_result(
                                                                error == NULL ? "command failed" : error);
     }
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
+    if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
+    return result;
+}
+
+MuseLinkWireError muse_link_build_guide_result(
+    const char *request_id, char *output, size_t capacity, size_t *output_size) {
+    static const char guide[] =
+        "# MuseVita\\n\\n"
+        "MuseVita is a native PlayStation Vita client for Muse. It can send and receive text chats over the Muse link, capture a photo with the Vita camera, and record a short voice note with the microphone.\\n\\n"
+        "Controls: START opens setup, SELECT reloads the one-time phone pairing bundle, L captures a photo, R records a voice note, and TRIANGLE sends the typed message.\\n\\n"
+        "Pairing is completed on the Vita or through the local QR transfer page; Muse credentials are not placed in the QR code.";
+    size_t offset = 0;
+    MuseLinkWireError result;
+    if (request_id == NULL || output == NULL || output_size == NULL) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    *output_size = 0;
+    result = json_format(output, capacity, &offset, "{\"method\":\"link.result\",\"id\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, request_id);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
+                                                           ",\"ok\":true,\"payload\":{\"format\":\"markdown\",\"guide\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, guide);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
+                                                           ",\"capabilities\":[\"chat\",\"vita.camera_capture\",\"vita.microphone_record\"]}}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
 }

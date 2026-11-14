@@ -82,6 +82,9 @@ static void close_transport(MuseVitaSession *session) {
     session->assembly_count = 0;
     session->subscribe_buffer_size = 0;
     session->request_buffer_size = 0;
+    session->request_active = false;
+    session->request_done = false;
+    session->request_failed = false;
 }
 
 static void set_transport_error(MuseVitaSession *session) {
@@ -486,6 +489,7 @@ static int websocket_receive(MuseVitaSession *session, int blocking, size_t *mes
         if (result != CURLE_OK) return -1;
         session->ws_message_size += received;
         if (meta != NULL && (meta->flags & CURLWS_CLOSE) != 0) return -1;
+        if (meta != NULL && (meta->flags & CURLWS_TEXT) != 0) return -1;
         if (meta != NULL && (meta->flags & (CURLWS_PING | CURLWS_PONG)) != 0) {
             session->ws_message_size = 0;
             if (meta->bytesleft == 0) continue;
@@ -536,6 +540,7 @@ static int send_register(MuseVitaSession *session) {
     size_t message_size = 0;
     char request_id[40];
     make_request_id(request_id);
+    strcpy(session->register_request_id, request_id);
     if (muse_link_build_register_message(request_id, session->node_id, "MuseVita",
                                           message, sizeof(message), &message_size) != MUSE_LINK_WIRE_OK) return -1;
     return send_control_json(session, message, message_size);
@@ -556,6 +561,42 @@ static int send_subscribe(MuseVitaSession *session) {
                                       headers, sizeof(headers) / sizeof(headers[0]), body, 2, 1,
                                       session->frame_buffer, sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK) return -1;
     return send_link_payload(session, session->frame_buffer, encoded_size);
+}
+
+static void begin_request(MuseVitaSession *session, int64_t stream_id) {
+    session->request_stream_id = stream_id;
+    session->request_status = 0;
+    session->request_buffer_size = 0;
+    session->request_active = true;
+    session->request_done = false;
+    session->request_failed = false;
+}
+
+static void finish_request(MuseVitaSession *session, int failed) {
+    session->request_failed = failed != 0 || session->request_failed;
+    session->request_done = true;
+}
+
+static int wait_for_request(MuseVitaSession *session) {
+    const uint64_t deadline = (uint64_t)sceKernelGetSystemTimeWide() + 60000000ULL;
+    while (session->request_active && !session->request_done) {
+        if (muse_vita_session_poll(session) != 0) {
+            session->request_active = false;
+            return -1;
+        }
+        if ((uint64_t)sceKernelGetSystemTimeWide() >= deadline) {
+            session->request_active = false;
+            return -1;
+        }
+        sceKernelDelayThread(10000);
+    }
+    if (!session->request_done || session->request_failed ||
+        session->request_status < 200 || session->request_status >= 300) {
+        session->request_active = false;
+        return -1;
+    }
+    session->request_active = false;
+    return 0;
 }
 
 static MuseControlError control_message(const uint8_t *message, size_t message_size, void *context) {
@@ -582,7 +623,14 @@ static MuseControlError control_message(const uint8_t *message, size_t message_s
                                    request_id, sizeof(request_id)) ||
             !muse_json_find_string((const char *)message, message_size, "command",
                                    command, sizeof(command))) return MUSE_CONTROL_OK;
-        if (strcmp(command, "vita.camera_capture") == 0) {
+        if (strcmp(command, "device.guide") == 0) {
+            if (muse_link_build_guide_result(request_id, result, sizeof(result), &result_size) != MUSE_LINK_WIRE_OK ||
+                send_control_json(session, result, result_size) != 0) {
+                session->state = MUSEVITA_SESSION_ERROR;
+                return MUSE_CONTROL_INVALID_ARGUMENT;
+            }
+            return MUSE_CONTROL_OK;
+        } else if (strcmp(command, "vita.camera_capture") == 0) {
             media_type = "image";
             if (muse_vita_capture_photo_jpeg(session->media_capture_buffer,
                                              sizeof(session->media_capture_buffer), &media_size) == 0 &&
@@ -615,7 +663,13 @@ static MuseControlError control_message(const uint8_t *message, size_t message_s
         }
         return MUSE_CONTROL_OK;
     }
-    if (!session->registered) {
+    if (muse_json_find_string((const char *)message, message_size, "id", request_id, sizeof(request_id)) &&
+        strcmp(request_id, session->register_request_id) == 0) {
+        int ok = 1;
+        if (muse_json_find_bool((const char *)message, message_size, "ok", &ok) && !ok) {
+            session->state = MUSEVITA_SESSION_ERROR;
+            return MUSE_CONTROL_INVALID_ARGUMENT;
+        }
         session->registered = true;
         session->state = MUSEVITA_SESSION_CONNECTED;
     }
@@ -697,13 +751,17 @@ static void consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, s
     }
 }
 
-static void consume_request_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size) {
+static void consume_request_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size,
+                                  int end_body) {
+    if (!session->request_active) return;
     if (size > sizeof(session->request_buffer) - session->request_buffer_size) {
-        session->request_buffer_size = 0;
+        session->request_failed = true;
+        finish_request(session, 1);
         return;
     }
     memcpy(session->request_buffer + session->request_buffer_size, bytes, size);
     session->request_buffer_size += size;
+    if (end_body) finish_request(session, 0);
 }
 
 static int process_service_response(MuseVitaSession *session, const uint8_t *payload, size_t payload_size) {
@@ -715,6 +773,15 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
         } else if (incoming.stream_id == session->subscribe_stream_id && incoming.status >= 300) {
             return -1;
         }
+        if (incoming.stream_id == session->request_stream_id && session->request_active) {
+            session->request_status = incoming.status;
+            if (incoming.body_size != 0) {
+                consume_request_bytes(session, incoming.body, incoming.body_size, 0);
+            }
+            if (incoming.end_body) {
+                finish_request(session, incoming.status < 200 || incoming.status >= 300);
+            }
+        }
     }
     if (incoming.body_size != 0) {
         if (incoming.stream_id == session->control_stream_id) {
@@ -722,10 +789,13 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
                                           control_message, session) < 0) return -1;
         } else if (incoming.stream_id == session->subscribe_stream_id) {
             consume_chat_bytes(session, incoming.body, incoming.body_size);
-        } else {
-            consume_request_bytes(session, incoming.body, incoming.body_size);
+        } else if (incoming.stream_id == session->request_stream_id &&
+                   session->request_active && incoming.kind == MUSE_LINK_INCOMING_BODY_CHUNK) {
+            consume_request_bytes(session, incoming.body, incoming.body_size, incoming.end_body);
         }
     }
+    if (incoming.kind == MUSE_LINK_INCOMING_RESET && incoming.stream_id == session->request_stream_id &&
+        session->request_active) finish_request(session, 1);
     return 0;
 }
 
@@ -868,7 +938,8 @@ int muse_vita_session_send_chat(MuseVitaSession *session, const char *message) {
     char request_id[64];
     MuseLinkHeader headers[4];
     int64_t stream_id;
-    if (session == NULL || message == NULL || session->state != MUSEVITA_SESSION_CONNECTED || !session->subscribed) return -1;
+    if (session == NULL || message == NULL || session->state != MUSEVITA_SESSION_CONNECTED ||
+        !session->subscribed || session->request_active) return -1;
     if (muse_link_build_chat_request(message, session->node_id, body, sizeof(body), &body_size) != MUSE_LINK_WIRE_OK) return -1;
     make_request_id(request_id);
     headers[0] = (MuseLinkHeader){"Content-Type", "application/json"};
@@ -876,11 +947,15 @@ int muse_vita_session_send_chat(MuseVitaSession *session, const char *message) {
     headers[2] = (MuseLinkHeader){"x-app-id", "musegadget"};
     headers[3] = (MuseLinkHeader){"Accept", "application/json"};
     stream_id = session->next_stream_id++;
+    begin_request(session, stream_id);
     if (muse_link_encode_http_request(stream_id, "POST", "/chat/stream", headers, 4,
                                       (const uint8_t *)body, body_size, 1,
-                                      session->frame_buffer, sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK) return -1;
-    if (send_link_payload(session, session->frame_buffer, encoded_size) != 0) return -1;
-    return 0;
+                                      session->frame_buffer, sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
+        send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
+        session->request_active = false;
+        return -1;
+    }
+    return wait_for_request(session);
 }
 
 int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
@@ -894,7 +969,8 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
     int64_t stream_id;
     if (session == NULL || message == NULL || item_type == NULL || mime_type == NULL ||
         filename == NULL || (data == NULL && data_size != 0) ||
-        session->state != MUSEVITA_SESSION_CONNECTED || !session->subscribed) return -1;
+        data_size == 0 || session->state != MUSEVITA_SESSION_CONNECTED ||
+        !session->subscribed || session->request_active) return -1;
     if (muse_link_build_chat_media_request(message, session->node_id, item_type, mime_type,
                                            filename, data, data_size, session->media_buffer,
                                            sizeof(session->media_buffer), &body_size) != MUSE_LINK_WIRE_OK) return -1;
@@ -904,10 +980,14 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
     headers[2] = (MuseLinkHeader){"x-app-id", "musegadget"};
     headers[3] = (MuseLinkHeader){"Accept", "application/json"};
     stream_id = session->next_stream_id++;
+    begin_request(session, stream_id);
     if (muse_link_encode_http_request(stream_id, "POST", "/chat/stream", headers, 4,
                                       NULL, 0, 0, session->frame_buffer,
                                       sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
-        send_link_payload(session, session->frame_buffer, encoded_size) != 0) return -1;
+        send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
+        session->request_active = false;
+        return -1;
+    }
     for (size_t offset = 0; offset < body_size;) {
         size_t chunk_size = body_size - offset;
         int end_body;
@@ -916,10 +996,13 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
         if (muse_link_encode_body_chunk(stream_id, (const uint8_t *)session->media_buffer + offset,
                                         chunk_size, end_body, session->frame_buffer,
                                         sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
-            send_link_payload(session, session->frame_buffer, encoded_size) != 0) return -1;
+            send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
+            session->request_active = false;
+            return -1;
+        }
         offset += chunk_size;
     }
-    return 0;
+    return wait_for_request(session);
 }
 
 void muse_vita_session_term(MuseVitaSession *session) {

@@ -82,6 +82,9 @@ MuseLinkWireError muse_link_build_command_result(
     const char *media_type, size_t media_size,
     char *output, size_t capacity, size_t *output_size);
 
+MuseLinkWireError muse_link_build_guide_result(
+    const char *request_id, char *output, size_t capacity, size_t *output_size);
+
 MuseLinkWireError muse_link_decode_noise_frame(
     const uint8_t *input, size_t input_size, MuseLinkNoiseFrame *frame);
 

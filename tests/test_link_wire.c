@@ -19,6 +19,8 @@ int main(void) {
     puts(json);
     assert(strstr(json, "link.register") != NULL);
     assert(strstr(json, "homelink-000001") != NULL);
+    assert(strstr(json, "musevita-psvita") != NULL);
+    assert(strstr(json, "device.guide") != NULL);
     assert(strstr(json, "vita.camera_capture") != NULL);
     assert(strstr(json, "vita.microphone_record") != NULL);
 
@@ -83,6 +85,12 @@ int main(void) {
         json[json_size] = '\0';
         assert(strstr(json, "\"method\":\"link.result\"") != NULL);
         assert(strstr(json, "\"bytes\":1234") != NULL);
+    }
+    {
+        assert(muse_link_build_guide_result("invoke-guide", json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
+        json[json_size] = '\0';
+        assert(strstr(json, "\"format\":\"markdown\"") != NULL);
+        assert(strstr(json, "MuseVita") != NULL);
     }
     return 0;
 }
