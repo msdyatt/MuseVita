@@ -81,19 +81,19 @@ static void boot_log(const char *stage) {
 
 static void draw_pairing_qr(const char *payload) {
     int size;
-    const int module_size = 4;
+    const int module_size = 2;
     const int quiet_zone = 4;
     if (payload == NULL || payload[0] == '\0' ||
         !qrcodegen_encodeText(payload, qr_temp, qr_code, qrcodegen_Ecc_LOW,
                               1, 20, qrcodegen_Mask_AUTO, true)) return;
     size = qrcodegen_getSize(qr_code);
-    vita2d_draw_rectangle(692, 224, (size + quiet_zone * 2) * module_size,
+    vita2d_draw_rectangle(700, 226, (size + quiet_zone * 2) * module_size,
                           (size + quiet_zone * 2) * module_size, WHITE);
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
             if (qrcodegen_getModule(qr_code, x, y))
-                vita2d_draw_rectangle(692 + (x + quiet_zone) * module_size,
-                                      224 + (y + quiet_zone) * module_size,
+                vita2d_draw_rectangle(700 + (x + quiet_zone) * module_size,
+                                      226 + (y + quiet_zone) * module_size,
                                       module_size, module_size, BG);
         }
     }
