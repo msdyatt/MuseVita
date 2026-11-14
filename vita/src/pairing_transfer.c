@@ -124,14 +124,25 @@ static int send_bytes(int socket, const void *data, size_t size) {
     return 0;
 }
 
+static const char *http_reason(int status) {
+    switch (status) {
+        case 200: return "OK";
+        case 400: return "Bad Request";
+        case 403: return "Forbidden";
+        case 404: return "Not Found";
+        case 500: return "Internal Server Error";
+        default: return "Error";
+    }
+}
+
 static int send_text(int socket, int status, const char *content_type, const char *body) {
     char header[256];
     size_t body_size = strlen(body);
     int header_size = snprintf(header, sizeof(header),
-                               "HTTP/1.1 %d\r\nContent-Type: %s\r\n"
+                               "HTTP/1.1 %d %s\r\nContent-Type: %s\r\n"
                                "Content-Length: %lu\r\nCache-Control: no-store\r\n"
                                "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
-                               status, content_type, (unsigned long)body_size);
+                               status, http_reason(status), content_type, (unsigned long)body_size);
     if (header_size < 0 || (size_t)header_size >= sizeof(header)) return -1;
     if (send_bytes(socket, header, (size_t)header_size) != 0) return -1;
     return send_bytes(socket, body, body_size);
@@ -153,7 +164,7 @@ static int send_file(int socket, const char *path, const char *content_type) {
     sceIoClose(fd);
     if (total == sizeof(transfer_file_buffer)) return send_text(socket, 500, "text/plain", "Page too large");
     header_size = snprintf(header, sizeof(header),
-                           "HTTP/1.1 200\r\nContent-Type: %s\r\n"
+                           "HTTP/1.1 200 OK\r\nContent-Type: %s\r\n"
                            "Content-Length: %lu\r\nCache-Control: no-store\r\n"
                            "X-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n",
                            content_type, (unsigned long)total);
