@@ -22,19 +22,16 @@ jobs:
     name: Build Vita VPK
     runs-on: ubuntu-latest
     # Keep CI on the same supported VitaSDK release series used for the
-    # reproducible local build. The official full image includes libvita2d,
-    # mbedTLS, curl, and the Vita packaging tools.
+    # reproducible local build. The minimal image supplies the toolchain and
+    # packaging tools; the project libraries are installed explicitly below.
     container:
-      image: vitasdk/vitasdk:2026.08
+      image: vitasdk/vitasdk:2026.08-minimal
     steps:
       - uses: actions/checkout@v4
-      - name: Select VitaSDK mbedTLS curl
-        # The full image also carries the legacy OpenSSL curl package. The
-        # local release build uses curl-mbedtls, which has the Vita-compatible
-        # static dependency set required by this project.
-        run: |
-          vdpm remove curl || true
-          vdpm install curl-mbedtls
+      - name: Install Vita port libraries
+        # Keep the image free of the legacy OpenSSL curl package. The project
+        # uses the Vita-compatible mbedTLS-backed curl variant used locally.
+        run: vdpm install libvita2d curl-mbedtls
       - name: Configure Vita build
         run: cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
       - name: Build VPK
