@@ -56,3 +56,12 @@ browser cookie.
 This is a local-network convenience path, not a replacement for the official
 BLE/account authorization step. Physical phone/Vita validation remains a
 release gate.
+
+## Hosting boundary
+
+The pairing page is intentionally served by the Vita at the one-time local
+URL in the QR code. A public HTTPS copy on `samdyatt.com` can provide help or
+download the VPK, but it cannot transparently replace the local page: browser
+mixed-content and cross-origin protections prevent a hosted page from being a
+general-purpose HTTP client for the Vita. Adding a public relay would also
+change the non-custodial security model, so it is not part of this release.
