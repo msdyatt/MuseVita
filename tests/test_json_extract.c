@@ -73,5 +73,11 @@ int main(void) {
                                            sizeof(value), NULL, NULL));
         assert(strcmp(value, "first") == 0);
     }
+    {
+        const char escaped[] = "{\"text\":\"caf\\u00e9 \\ud83d\\ude00\"}";
+        const char expected[] = "caf\xc3\xa9 \xf0\x9f\x98\x80";
+        assert(muse_json_find_string(escaped, strlen(escaped), "text", value, sizeof(value)));
+        assert(strcmp(value, expected) == 0);
+    }
     return 0;
 }

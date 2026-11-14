@@ -17,6 +17,43 @@ static int key_at(const char *json, size_t size, size_t offset, const char *key,
            json[offset + key_size + 1] == '"';
 }
 
+static int hex_value(unsigned char value) {
+    if (value >= '0' && value <= '9') return value - '0';
+    if (value >= 'a' && value <= 'f') return value - 'a' + 10;
+    if (value >= 'A' && value <= 'F') return value - 'A' + 10;
+    return -1;
+}
+
+static int append_codepoint(char *output, size_t capacity, size_t *out, uint32_t codepoint) {
+    unsigned char encoded[4];
+    size_t encoded_size;
+    if (codepoint == 0 || codepoint > 0x10ffffu ||
+        (codepoint >= 0xd800u && codepoint <= 0xdfffu)) return 0;
+    if (codepoint <= 0x7fu) {
+        encoded[0] = (unsigned char)codepoint;
+        encoded_size = 1;
+    } else if (codepoint <= 0x7ffu) {
+        encoded[0] = (unsigned char)(0xc0u | (codepoint >> 6));
+        encoded[1] = (unsigned char)(0x80u | (codepoint & 0x3fu));
+        encoded_size = 2;
+    } else if (codepoint <= 0xffffu) {
+        encoded[0] = (unsigned char)(0xe0u | (codepoint >> 12));
+        encoded[1] = (unsigned char)(0x80u | ((codepoint >> 6) & 0x3fu));
+        encoded[2] = (unsigned char)(0x80u | (codepoint & 0x3fu));
+        encoded_size = 3;
+    } else {
+        encoded[0] = (unsigned char)(0xf0u | (codepoint >> 18));
+        encoded[1] = (unsigned char)(0x80u | ((codepoint >> 12) & 0x3fu));
+        encoded[2] = (unsigned char)(0x80u | ((codepoint >> 6) & 0x3fu));
+        encoded[3] = (unsigned char)(0x80u | (codepoint & 0x3fu));
+        encoded_size = 4;
+    }
+    if (*out + encoded_size + 1 > capacity) return 0;
+    memcpy(output + *out, encoded, encoded_size);
+    *out += encoded_size;
+    return 1;
+}
+
 static int copy_json_string(const char *json, size_t size, size_t *offset,
                             char *output, size_t capacity) {
     size_t out = 0;
@@ -38,6 +75,26 @@ static int copy_json_string(const char *json, size_t size, size_t *offset,
                 if (c == 'b' || c == 'f' || c == 'n' || c == 'r' || c == 't') {
                     c = (c == 'n') ? '\n' : (c == 'r') ? '\r' : (c == 't') ? '\t' : ' ';
                 }
+            } else if (c == 'u') {
+                uint32_t codepoint = 0;
+                for (unsigned i = 0; i < 4; i++) {
+                    int digit;
+                    if (*offset >= size || (digit = hex_value((unsigned char)json[(*offset)++])) < 0) return 0;
+                    codepoint = (codepoint << 4) | (uint32_t)digit;
+                }
+                if (codepoint >= 0xd800u && codepoint <= 0xdbffu) {
+                    uint32_t low = 0;
+                    if (*offset + 4 > size || json[(*offset)++] != '\\' || json[(*offset)++] != 'u') return 0;
+                    for (unsigned i = 0; i < 4; i++) {
+                        int digit;
+                        if (*offset >= size || (digit = hex_value((unsigned char)json[(*offset)++])) < 0) return 0;
+                        low = (low << 4) | (uint32_t)digit;
+                    }
+                    if (low < 0xdc00u || low > 0xdfffu) return 0;
+                    codepoint = 0x10000u + ((codepoint - 0xd800u) << 10) + (low - 0xdc00u);
+                }
+                if (!append_codepoint(output, capacity, &out, codepoint)) return 0;
+                continue;
             } else {
                 return 0;
             }
