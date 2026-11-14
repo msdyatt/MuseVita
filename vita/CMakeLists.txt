@@ -47,4 +47,5 @@ vita_create_self(musevita.self musevita)
 vita_create_vpk(MuseVita.vpk ${VITA_TITLEID} musevita.self
   VERSION ${VITA_VERSION}
   NAME "${VITA_APP_NAME}"
+  FILE "${CMAKE_CURRENT_SOURCE_DIR}/assets/icon0.png" sce_sys/icon0.png
 )

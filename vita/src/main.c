@@ -25,6 +25,7 @@
 #define BORDER RGBA8(54, 60, 82, 255)
 #define WARNING RGBA8(240, 184, 100, 255)
 #define SUCCESS RGBA8(111, 214, 160, 255)
+#define MUSEVITA_PGF_BASE_SIZE 32.0f
 
 enum {
     PAGE_STATUS = 0,
@@ -34,7 +35,8 @@ enum {
 };
 
 static void text(vita2d_pgf *font, int x, int y, float size, uint32_t color, const char *value) {
-    vita2d_pgf_draw_text(font, x, y, color, size, value);
+    /* vita2d PGF takes a scale multiplier, not a pixel size. */
+    vita2d_pgf_draw_text(font, x, y, color, size / MUSEVITA_PGF_BASE_SIZE, value);
 }
 
 static void draw_header(vita2d_pgf *font, MuseVitaNetworkState network) {
