@@ -84,3 +84,16 @@ int muse_json_find_bool(const char *json, size_t json_size, const char *key, int
     }
     return 0;
 }
+
+int muse_json_has_key(const char *json, size_t json_size, const char *key) {
+    size_t key_size;
+    if (json == NULL || key == NULL) return 0;
+    key_size = strlen(key);
+    for (size_t i = 0; i + key_size + 2 < json_size; i++) {
+        size_t value_offset;
+        if (!key_at(json, json_size, i, key, key_size)) continue;
+        value_offset = skip_space(json, json_size, i + key_size + 2);
+        if (value_offset < json_size && json[value_offset] == ':') return 1;
+    }
+    return 0;
+}

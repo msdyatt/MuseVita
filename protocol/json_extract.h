@@ -7,5 +7,6 @@
 int muse_json_find_string(const char *json, size_t json_size, const char *key,
                           char *output, size_t output_capacity);
 int muse_json_find_bool(const char *json, size_t json_size, const char *key, int *value);
+int muse_json_has_key(const char *json, size_t json_size, const char *key);
 
 #endif

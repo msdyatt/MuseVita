@@ -18,5 +18,7 @@ int main(void) {
     assert(muse_json_find_string(json, strlen(json), "text", value, sizeof(value)));
     assert(strcmp(value, "hello\nworld") == 0);
     assert(muse_json_find_bool(json, strlen(json), "default", &boolean) && boolean == 1);
+    assert(muse_json_has_key(json, strlen(json), "payload"));
+    assert(!muse_json_has_key(json, strlen(json), "error"));
     return 0;
 }

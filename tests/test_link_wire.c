@@ -90,6 +90,7 @@ int main(void) {
         assert(muse_link_build_guide_result("invoke-guide", json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
         json[json_size] = '\0';
         assert(strstr(json, "\"format\":\"markdown\"") != NULL);
+        assert(strstr(json, "\"capabilities\":{") != NULL);
         assert(strstr(json, "MuseVita") != NULL);
     }
     return 0;

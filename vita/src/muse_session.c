@@ -35,6 +35,7 @@ typedef struct ResponseBuffer {
 
 static void make_identity(MuseVitaSession *session, const char *json, size_t json_size);
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
+static int delete_file(const char *path);
 
 static int load_sdk_token_file(MuseVitaSession *session) {
     char token[sizeof(session->sdk_token)];
@@ -91,6 +92,20 @@ static void set_transport_error(MuseVitaSession *session) {
     close_transport(session);
     session->state = MUSEVITA_SESSION_ERROR;
     session->retry_after_us = (uint64_t)sceKernelGetSystemTimeWide() + RETRY_DELAY_US;
+    if (session->chat != NULL) session->chat->transport_connected = false;
+}
+
+static void forget_pairing(MuseVitaSession *session) {
+    (void)delete_file(CREDENTIALS_PATH);
+    (void)delete_file(PAIRING_PATH);
+    (void)delete_file(SDK_TOKEN_PATH);
+    memset(session->access_token, 0, sizeof(session->access_token));
+    memset(session->refresh_token, 0, sizeof(session->refresh_token));
+    memset(session->sdk_token, 0, sizeof(session->sdk_token));
+    session->registered = false;
+    session->subscribed = false;
+    session->unpaired = true;
+    session->state = MUSEVITA_SESSION_NO_PAIRING;
     if (session->chat != NULL) session->chat->transport_connected = false;
 }
 
@@ -663,10 +678,16 @@ static MuseControlError control_message(const uint8_t *message, size_t message_s
         }
         return MUSE_CONTROL_OK;
     }
+    if (muse_json_find_string((const char *)message, message_size, "event", command, sizeof(command)) &&
+        (strcmp(command, "link.unpaired") == 0 || strcmp(command, "node.unpaired") == 0)) {
+        forget_pairing(session);
+        return MUSE_CONTROL_OK;
+    }
     if (muse_json_find_string((const char *)message, message_size, "id", request_id, sizeof(request_id)) &&
         strcmp(request_id, session->register_request_id) == 0) {
         int ok = 1;
-        if (muse_json_find_bool((const char *)message, message_size, "ok", &ok) && !ok) {
+        if (muse_json_has_key((const char *)message, message_size, "error") ||
+            (muse_json_find_bool((const char *)message, message_size, "ok", &ok) && !ok)) {
             session->state = MUSEVITA_SESSION_ERROR;
             return MUSE_CONTROL_INVALID_ARGUMENT;
         }
@@ -907,6 +928,12 @@ int muse_vita_session_poll(MuseVitaSession *session) {
     size_t message_size = 0;
     int result;
     if (session == NULL || session->curl == NULL || !session->noise_ready) return -1;
+    if (session->unpaired) {
+        close_transport(session);
+        session->unpaired = false;
+        session->state = MUSEVITA_SESSION_NO_PAIRING;
+        return 0;
+    }
     if ((uint64_t)sceKernelGetSystemTimeWide() - session->last_ping_us >= PING_INTERVAL_US) {
         uint8_t ping = 0;
         size_t sent = 0;

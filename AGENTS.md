@@ -14,12 +14,13 @@ replace Meta's BLE authorization protocol without official support.
 
 ## Current status and non-negotiable honesty
 
-The existing `vita/src/main.c` is a native UI and status foundation, not a
-live Muse client. The shared protocol directory contains control framing,
-link wire builders, and a Vita-built Noise XX initiator, but the complete WSS
-session is not integrated. The `web/` setup page generates QR demo sessions
-**only**. No real Muse pairing, credential transfer, cloud auth, chat, or Vita
-hardware installation has been verified in this package.
+The repository now contains a native UI and source-level direct Muse client:
+the shared protocol directory contains control framing, link wire builders,
+and a Vita-built Noise XX initiator, while `vita/src/muse_session.c` integrates
+HTTPS VM lookup, WSS/Noise, link registration, chat send/subscribe, and bounded
+media paths. The `web/` setup page still generates QR demo sessions **only**.
+No real Muse pairing, live cloud session, or Vita hardware installation has
+been verified in this package; do not claim those as complete.
 Update README feature status whenever you implement and test something.
 
 ## Reference implementations

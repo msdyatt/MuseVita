@@ -13,7 +13,7 @@
 1. Initial authorization is currently BLE-based via Muse mobile application and `pairing_client_hello` / `pairing_encrypted` / `provision_v2` exchanges.
 2. Community pairing v5 includes P-256 ECDH, HKDF-SHA256 and AES-256-GCM. The SDK obtains device access/refresh credentials and VM info. SDK tokens must be user-owned.
 3. Paired gadget fetches its VM and connects to `wss://<noise_host>/v1/noise?vm_id=<id>` with a per-VM bearer; upgrade is followed by Noise XX session establishment.
-4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages and `/chat/subscribe` for live events; `/chat/history` supports history reads. See Linux SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
+4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages and `/chat/subscribe` for live events. The current official gadget `LinkSession` does not expose a historical chat endpoint, so Vita keeps a bounded in-memory view and does not claim server-side replay. See the SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
 5. Token lifecycle includes refresh and reconnection; temporary setup hosts must shut down before Vita uses the same persistent identity to avoid concurrent active sessions.
 
 **Do not guess any cryptographic framing from this document.** Port the SDK's exact fixture-tested behavior. Inspect `linux/tests/vectors/` and `linux/tests/test_link_client.py` in the current SDK source, and validate with the real service before shipping.
@@ -26,9 +26,9 @@
   mbedTLS and low-order-point rejection; cross-runtime fixture verification remains
 - `protocol/link`: shared stream framing, register/invoke/result, HTTP-over-link
   request encoding, and response decoding are implemented
-- `protocol/chat`: chat send, NDJSON subscription, and streamed event rendering
-  are implemented; history pagination remains and transport reconnect now
-  retries after a bounded delay
+- `protocol/chat`: chat send, NDJSON subscription, streamed event rendering,
+  and bounded in-memory history are implemented; server-side history/replay is
+  not exposed by the current official gadget client
 - `vita/src/vita_media`: bounded one-shot Vita camera/JPEG and microphone/WAV
   capture paths that send official image/file items through the shared chat
   stream; physical capture validation remains a release gate
