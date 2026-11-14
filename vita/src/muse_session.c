@@ -538,9 +538,21 @@ static int refresh_credentials(MuseVitaSession *session) {
 }
 
 static int websocket_send(CURL *curl, const uint8_t *data, size_t size) {
-    size_t sent = 0;
-    CURLcode result = curl_ws_send(curl, data, size, &sent, 0, CURLWS_BINARY);
-    return result == CURLE_OK && sent == size ? 0 : -1;
+    size_t offset = 0;
+    const uint64_t deadline = (uint64_t)sceKernelGetSystemTimeWide() + HANDSHAKE_TIMEOUT_US;
+    while (offset < size) {
+        size_t sent = 0;
+        CURLcode result = curl_ws_send(curl, data + offset, size - offset, &sent, 0,
+                                       CURLWS_BINARY);
+        if (result == CURLE_AGAIN) {
+            if ((uint64_t)sceKernelGetSystemTimeWide() >= deadline) return -1;
+            sceKernelDelayThread(10000);
+            continue;
+        }
+        if (result != CURLE_OK || sent == 0 || sent > size - offset) return -1;
+        offset += sent;
+    }
+    return 0;
 }
 
 static int append_url_component(char *output, size_t capacity, size_t *offset, const char *value) {
@@ -581,25 +593,30 @@ static int websocket_receive(MuseVitaSession *session, int blocking, size_t *mes
             continue;
         }
         if (result != CURLE_OK) return -1;
-        if (meta != NULL && (meta->flags & CURLWS_CLOSE) != 0) return -1;
-        if (session->ws_text_active) {
-            if (meta == NULL || meta->bytesleft == 0) session->ws_text_active = false;
+        if (meta == NULL) return -1;
+        if ((meta->flags & CURLWS_CLOSE) != 0) return -1;
+        /* Control frames may appear between fragments. Their payload is
+           intentionally discarded without disturbing the binary message
+           being reassembled in ws_message. */
+        if ((meta->flags & (CURLWS_PING | CURLWS_PONG)) != 0) {
+            if (meta->bytesleft != 0) {
+                if (!blocking) return 0;
+                continue;
+            }
             continue;
         }
-        if (meta != NULL && (meta->flags & CURLWS_TEXT) != 0) {
-            session->ws_message_size = 0;
-            session->ws_text_active = meta->bytesleft != 0;
+        if ((meta->flags & CURLWS_TEXT) != 0 || session->ws_text_active) {
+            session->ws_text_active = meta->bytesleft != 0 ||
+                                      (meta->flags & CURLWS_CONT) != 0;
+            if (!blocking) return 0;
             continue;
         }
+        if ((meta->flags & CURLWS_BINARY) == 0 && !session->ws_message_active) return -1;
         session->ws_message_size += received;
-        if (meta != NULL && (meta->flags & (CURLWS_PING | CURLWS_PONG)) != 0) {
-            session->ws_message_size = 0;
-            if (meta->bytesleft == 0) continue;
-            return -1;
-        }
-        if (meta == NULL || meta->bytesleft == 0) {
+        if (meta->bytesleft == 0 && (meta->flags & CURLWS_CONT) == 0) {
             *message_size = session->ws_message_size;
             session->ws_message_size = 0;
+            session->ws_message_active = false;
             return 1;
         }
         session->ws_message_active = true;
