@@ -9,6 +9,7 @@
  */
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <string.h>
 
@@ -16,6 +17,7 @@
 #include <psp2/apputil.h>
 #include <psp2/ctrl.h>
 #include <psp2/ime_dialog.h>
+#include <psp2/io/fcntl.h>
 #include <psp2/kernel/processmgr.h>
 #include <psp2/kernel/threadmgr.h>
 #include <psp2/sysmodule.h>
@@ -59,6 +61,19 @@ static const SceWChar16 chat_ime_title[] = {
     'M', 'e', 's', 's', 'a', 'g', 'e', ' ', 't', 'o', ' ', 'M', 'u', 's', 'e', 0
 };
 static MuseVitaSession muse_session;
+
+static void boot_log(const char *stage) {
+    SceUID fd;
+    char line[96];
+    int size;
+    if (stage == NULL) return;
+    fd = sceIoOpen("ux0:data/MuseVita/boot.log",
+                   SCE_O_WRONLY | SCE_O_CREAT | SCE_O_TRUNC, 0600);
+    if (fd < 0) return;
+    size = snprintf(line, sizeof(line), "%s\n", stage);
+    if (size > 0) (void)sceIoWrite(fd, line, size);
+    sceIoClose(fd);
+}
 
 static void draw_pairing_qr(const char *payload) {
     int size;
@@ -316,31 +331,38 @@ static void term_ime(void) {
 }
 
 int main(void) {
+    bool rendered_once = false;
+    boot_log("main:start");
     sceCtrlSetSamplingMode(SCE_CTRL_MODE_DIGITAL);
     vita2d_init();
+    boot_log("vita2d:initialized");
     vita2d_set_clear_color(BG);
     vita2d_pgf *font = vita2d_load_default_pgf();
     if (!font) {
+        boot_log("vita2d:font-failed");
         vita2d_fini();
         sceKernelExitProcess(1);
         return 1;
     }
 
     bool network_ready = muse_vita_network_init() == 0;
+    boot_log(network_ready ? "network:initialized" : "network:unavailable");
     MuseVitaNetworkProvider network_provider = muse_vita_default_network_provider();
     MuseVitaChatState chat;
+    bool session_ready;
     muse_vita_chat_init(&chat);
     media_status[0] = '\0';
     setup_status[0] = '\0';
-    muse_vita_session_init(&muse_session);
+    session_ready = muse_vita_session_init(&muse_session) == 0;
+    boot_log(session_ready ? "session:initialized" : "session:init-failed");
     static MuseVitaPairingTransfer pairing_transfer;
     memset(&pairing_transfer, 0, sizeof(pairing_transfer));
     pairing_transfer.listen_socket = -1;
     bool pairing_transfer_started = false;
-    if (muse_vita_session_load_pairing(&muse_session) == 0 && network_ready) {
-        (void)muse_vita_session_connect(&muse_session, &chat);
-    }
+    if (session_ready && muse_vita_session_load_pairing(&muse_session) == 0) boot_log("pairing:loaded");
+    else boot_log("pairing:not-loaded");
     init_ime();
+    boot_log("ime:initialized");
     SceCtrlData pad = {0};
     uint32_t previous = 0;
     int page = PAGE_STATUS;
@@ -391,12 +413,16 @@ int main(void) {
         if (page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE && !pairing_transfer_started) {
             pairing_transfer_started = muse_vita_pairing_transfer_start(&pairing_transfer) == 0;
         }
-        if (network == MUSEVITA_NETWORK_ONLINE &&
+        if (rendered_once && network == MUSEVITA_NETWORK_ONLINE &&
             (muse_vita_session_should_connect(&muse_session) ||
              muse_vita_session_should_reconnect(&muse_session))) {
+            boot_log("session:connect-start");
             (void)muse_vita_session_connect(&muse_session, &chat);
+            boot_log(muse_vita_session_is_connected(&muse_session)
+                         ? "session:connected" : "session:connect-failed");
         }
         draw(font, page, network, &chat, &muse_session, &pairing_transfer);
+        rendered_once = true;
         if (ime_open) (void)vita2d_common_dialog_update();
         sceKernelDelayThread(16000);
     }
