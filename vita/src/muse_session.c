@@ -37,6 +37,37 @@ static void make_identity(MuseVitaSession *session, const char *json, size_t jso
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
 static int delete_file(const char *path);
 
+static int is_hex_digit(char value) {
+    return (value >= '0' && value <= '9') ||
+           (value >= 'a' && value <= 'f') || (value >= 'A' && value <= 'F');
+}
+
+static int valid_mac(const char *mac) {
+    if (mac == NULL || strlen(mac) != 17) return 0;
+    for (size_t i = 0; i < 17; i++) {
+        if (i == 2 || i == 5 || i == 8 || i == 11 || i == 14) {
+            if (mac[i] != ':') return 0;
+        } else if (!is_hex_digit(mac[i])) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int valid_sdk_token(const char *token) {
+    static const char last_alphabet[] = "AEIMQUYcgkosw048";
+    size_t length;
+    if (token == NULL) return 0;
+    length = strlen(token);
+    if (length != 48 || strncmp(token, "mgst_", 5) != 0) return 0;
+    for (size_t i = 5; i < 47; i++) {
+        char value = token[i];
+        if (!((value >= 'A' && value <= 'Z') || (value >= 'a' && value <= 'z') ||
+              (value >= '0' && value <= '9') || value == '_' || value == '-')) return 0;
+    }
+    return strchr(last_alphabet, token[47]) != NULL;
+}
+
 static int load_sdk_token_file(MuseVitaSession *session) {
     char token[sizeof(session->sdk_token)];
     size_t token_size = 0;
@@ -261,8 +292,12 @@ static int ensure_identity(MuseVitaSession *session) {
     char identity[1024];
     size_t identity_size;
     if (read_file(IDENTITY_PATH, identity, sizeof(identity), &identity_size) == 0) {
-        make_identity(session, identity, identity_size);
-        return 0;
+        char mac[32];
+        if (muse_json_find_string(identity, identity_size, "mac", mac, sizeof(mac)) &&
+            valid_mac(mac)) {
+            make_identity(session, identity, identity_size);
+            return 0;
+        }
     }
     make_identity(session, "{}", 2);
     {
@@ -345,9 +380,12 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
 int muse_vita_session_import_pairing(MuseVitaSession *session, const char *identity_json,
                                      size_t identity_size, const char *pairing_json,
                                      size_t pairing_size, const char *sdk_token) {
+    char identity_mac[32];
     if (session == NULL || identity_json == NULL || pairing_json == NULL || sdk_token == NULL ||
         identity_size == 0 || pairing_size == 0 || strlen(sdk_token) == 0 ||
-        strlen(sdk_token) >= sizeof(session->sdk_token)) return -1;
+        strlen(sdk_token) >= sizeof(session->sdk_token) ||
+        !muse_json_find_string(identity_json, identity_size, "mac", identity_mac, sizeof(identity_mac)) ||
+        !valid_mac(identity_mac) || !valid_sdk_token(sdk_token)) return -1;
     if (!muse_json_find_string(pairing_json, pairing_size, "access_token",
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string(pairing_json, pairing_size, "refresh_token",
