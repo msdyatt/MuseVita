@@ -2,9 +2,14 @@
 
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define MAX_LINK_FIELD_BYTES (4u * 1024u * 1024u)
+#define MAX_HTTP_REQUEST_BYTES (64u * 1024u + 4096u)
+
+static MuseLinkWireError append_string(uint8_t *output, size_t capacity, size_t *offset,
+                                       unsigned field, const char *value);
 
 static MuseLinkWireError append_bytes(uint8_t *output, size_t capacity, size_t *offset,
                                       const uint8_t *data, size_t data_size) {
@@ -38,6 +43,24 @@ static MuseLinkWireError append_field(uint8_t *output, size_t capacity, size_t *
     MuseLinkWireError result = append_key(output, capacity, offset, field, 2);
     if (result == MUSE_LINK_WIRE_OK) result = append_varint(output, capacity, offset, data_size);
     if (result == MUSE_LINK_WIRE_OK) result = append_bytes(output, capacity, offset, data, data_size);
+    return result;
+}
+
+static MuseLinkWireError append_header(uint8_t *output, size_t capacity, size_t *offset,
+                                       const MuseLinkHeader *header) {
+    uint8_t encoded[512];
+    size_t encoded_size = 0;
+    MuseLinkWireError result;
+    if (header == NULL || header->key == NULL || header->value == NULL) {
+        return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    }
+    result = append_string(encoded, sizeof(encoded), &encoded_size, 1, header->key);
+    if (result == MUSE_LINK_WIRE_OK) {
+        result = append_string(encoded, sizeof(encoded), &encoded_size, 2, header->value);
+    }
+    if (result == MUSE_LINK_WIRE_OK) {
+        result = append_field(output, capacity, offset, 3, encoded, encoded_size);
+    }
     return result;
 }
 
@@ -100,6 +123,67 @@ MuseLinkWireError muse_link_encode_body_chunk(
     if (result == MUSE_LINK_WIRE_OK) result = append_field(frame, sizeof(frame), &frame_size, 4, chunk, chunk_size);
     if (result == MUSE_LINK_WIRE_OK) result = append_field(service_request, sizeof(service_request), &service_size, 2, frame, frame_size);
     if (result == MUSE_LINK_WIRE_OK) result = append_bytes(output, capacity, output_size, service_request, service_size);
+    return result;
+}
+
+MuseLinkWireError muse_link_encode_http_request(
+    int64_t stream_id, const char *method, const char *path,
+    const MuseLinkHeader *headers, size_t header_count,
+    const uint8_t *body, size_t body_size, int end_body,
+    uint8_t *output, size_t capacity, size_t *output_size) {
+    uint8_t *request = NULL;
+    uint8_t *frame = NULL;
+    uint8_t *service_request = NULL;
+    size_t request_capacity;
+    size_t frame_capacity;
+    size_t service_capacity;
+    size_t request_size = 0;
+    size_t frame_size = 0;
+    size_t service_size = 0;
+    MuseLinkWireError result;
+    if (output == NULL || output_size == NULL || method == NULL || path == NULL ||
+        (body == NULL && body_size != 0) || header_count > 32) {
+        return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    }
+    if (body_size > MAX_HTTP_REQUEST_BYTES) return MUSE_LINK_WIRE_VALUE_TOO_LARGE;
+    *output_size = 0;
+    request_capacity = body_size + 256u;
+    for (size_t i = 0; i < header_count; i++) {
+        if (headers[i].key == NULL || headers[i].value == NULL) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+        request_capacity += strlen(headers[i].key) + strlen(headers[i].value) + 16u;
+    }
+    if (request_capacity < body_size || request_capacity > MAX_HTTP_REQUEST_BYTES + 4096u) {
+        return MUSE_LINK_WIRE_VALUE_TOO_LARGE;
+    }
+    frame_capacity = request_capacity + 64u;
+    service_capacity = request_capacity + 128u;
+    request = malloc(request_capacity);
+    frame = malloc(frame_capacity);
+    service_request = malloc(service_capacity);
+    if (request == NULL || frame == NULL || service_request == NULL) {
+        free(request);
+        free(frame);
+        free(service_request);
+        return MUSE_LINK_WIRE_OUTPUT_TOO_SMALL;
+    }
+    result = append_string(request, request_capacity, &request_size, 1, method);
+    if (result == MUSE_LINK_WIRE_OK) result = append_string(request, request_capacity, &request_size, 2, path);
+    for (size_t i = 0; result == MUSE_LINK_WIRE_OK && i < header_count; i++) {
+        result = append_header(request, request_capacity, &request_size, &headers[i]);
+    }
+    if (result == MUSE_LINK_WIRE_OK && body_size != 0) {
+        result = append_field(request, request_capacity, &request_size, 4, body, body_size);
+    }
+    if (result == MUSE_LINK_WIRE_OK && end_body) {
+        result = append_bool(request, request_capacity, &request_size, 5, 1);
+    }
+    if (result == MUSE_LINK_WIRE_OK) result = append_int64(frame, frame_capacity, &frame_size, 1, stream_id);
+    if (result == MUSE_LINK_WIRE_OK) result = append_field(frame, frame_capacity, &frame_size, 2, request, request_size);
+    if (result == MUSE_LINK_WIRE_OK) result = append_field(service_request, service_capacity, &service_size, 2, frame, frame_size);
+    if (result == MUSE_LINK_WIRE_OK) result = append_bytes(output, capacity, output_size, service_request, service_size);
+    free(request);
+    free(frame);
+    free(service_request);
     return result;
 }
 
@@ -210,4 +294,237 @@ MuseLinkWireError muse_link_build_chat_request(
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
+}
+
+static MuseLinkWireError read_varint(const uint8_t *input, size_t input_size, size_t *offset,
+                                     uint64_t *value) {
+    uint64_t result = 0;
+    for (unsigned i = 0; i < 10; i++) {
+        if (*offset >= input_size) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        uint8_t byte = input[(*offset)++];
+        if (i == 9 && (byte & 0xfeu) != 0) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        result |= ((uint64_t)(byte & 0x7fu)) << (i * 7u);
+        if ((byte & 0x80u) == 0) {
+            *value = result;
+            return MUSE_LINK_WIRE_OK;
+        }
+    }
+    return MUSE_LINK_WIRE_INVALID_MESSAGE;
+}
+
+static MuseLinkWireError read_key(const uint8_t *input, size_t input_size, size_t *offset,
+                                  unsigned *field, unsigned *wire_type) {
+    uint64_t key;
+    MuseLinkWireError result = read_varint(input, input_size, offset, &key);
+    if (result != MUSE_LINK_WIRE_OK || key == 0 || key > 0xffffffffu) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+    *field = (unsigned)(key >> 3);
+    *wire_type = (unsigned)(key & 7u);
+    if (*field == 0 || (*wire_type != 0 && *wire_type != 1 && *wire_type != 2 && *wire_type != 5)) {
+        return MUSE_LINK_WIRE_INVALID_MESSAGE;
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+static MuseLinkWireError read_delimited(const uint8_t *input, size_t input_size, size_t *offset,
+                                        const uint8_t **value, size_t *value_size) {
+    uint64_t length;
+    MuseLinkWireError result = read_varint(input, input_size, offset, &length);
+    if (result != MUSE_LINK_WIRE_OK || length > input_size - *offset) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+    *value = input + *offset;
+    *value_size = (size_t)length;
+    *offset += (size_t)length;
+    return MUSE_LINK_WIRE_OK;
+}
+
+static MuseLinkWireError skip_value(const uint8_t *input, size_t input_size, size_t *offset,
+                                    unsigned wire_type) {
+    uint64_t ignored;
+    if (wire_type == 0) return read_varint(input, input_size, offset, &ignored);
+    if (wire_type == 1) {
+        if (input_size - *offset < 8) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        *offset += 8;
+        return MUSE_LINK_WIRE_OK;
+    }
+    if (wire_type == 2) {
+        const uint8_t *ignored_bytes;
+        size_t ignored_size;
+        return read_delimited(input, input_size, offset, &ignored_bytes, &ignored_size);
+    }
+    if (wire_type == 5) {
+        if (input_size - *offset < 4) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        *offset += 4;
+        return MUSE_LINK_WIRE_OK;
+    }
+    return MUSE_LINK_WIRE_INVALID_MESSAGE;
+}
+
+MuseLinkWireError muse_link_decode_noise_frame(
+    const uint8_t *input, size_t input_size, MuseLinkNoiseFrame *frame) {
+    size_t offset = 0;
+    if (input == NULL || frame == NULL) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    memset(frame, 0, sizeof(*frame));
+    frame->total_chunks = 1;
+    while (offset < input_size) {
+        unsigned field, wire_type;
+        MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1 || field == 2 || field == 3) {
+            uint64_t value;
+            if (wire_type != 0 || read_varint(input, input_size, &offset, &value) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            if (field == 1) frame->chunk_id = (int64_t)value;
+            else if (field == 2) {
+                if (value > UINT32_MAX) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+                frame->chunk_index = (uint32_t)value;
+            } else {
+                if (value > UINT32_MAX) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+                frame->total_chunks = (uint32_t)value;
+            }
+        } else if (field == 4) {
+            if (wire_type != 2 || read_delimited(input, input_size, &offset,
+                                                  &frame->payload, &frame->payload_size) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+        } else if (skip_value(input, input_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    if (frame->total_chunks == 0 || frame->total_chunks > MUSE_LINK_MAX_NOISE_CHUNKS ||
+        frame->chunk_index >= frame->total_chunks || frame->payload_size > MUSE_LINK_MAX_NOISE_CHUNK_BYTES) {
+        return MUSE_LINK_WIRE_INVALID_MESSAGE;
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+static MuseLinkWireError decode_response_body(const uint8_t *input, size_t input_size,
+                                              MuseLinkIncoming *incoming) {
+    size_t offset = 0;
+    while (offset < input_size) {
+        unsigned field, wire_type;
+        uint64_t value;
+        MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1) {
+            if (wire_type != 0 || read_varint(input, input_size, &offset, &value) != MUSE_LINK_WIRE_OK || value > INT32_MAX) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            incoming->status = (int)value;
+        } else if (field == 3) {
+            if (wire_type != 2 || read_delimited(input, input_size, &offset,
+                                                  &incoming->body, &incoming->body_size) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+        } else if (field == 4) {
+            if (wire_type != 0 || read_varint(input, input_size, &offset, &value) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            incoming->end_body = value != 0;
+        } else if (skip_value(input, input_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+static MuseLinkWireError decode_body_chunk(const uint8_t *input, size_t input_size,
+                                           MuseLinkIncoming *incoming) {
+    size_t offset = 0;
+    while (offset < input_size) {
+        unsigned field, wire_type;
+        uint64_t value;
+        MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1) {
+            if (wire_type != 2 || read_delimited(input, input_size, &offset,
+                                                  &incoming->body, &incoming->body_size) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+        } else if (field == 2) {
+            if (wire_type != 0 || read_varint(input, input_size, &offset, &value) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            incoming->end_body = value != 0;
+        } else if (skip_value(input, input_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+static MuseLinkWireError decode_reset(const uint8_t *input, size_t input_size,
+                                      MuseLinkIncoming *incoming) {
+    size_t offset = 0;
+    while (offset < input_size) {
+        unsigned field, wire_type;
+        uint64_t value;
+        MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1) {
+            if (wire_type != 0 || read_varint(input, input_size, &offset, &value) != MUSE_LINK_WIRE_OK || value > INT32_MAX) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            incoming->reset_code = (int)value;
+        } else if (skip_value(input, input_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    return MUSE_LINK_WIRE_OK;
+}
+
+MuseLinkWireError muse_link_decode_service_response(
+    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming) {
+    const uint8_t *service_payload = NULL;
+    size_t service_payload_size = 0;
+    size_t offset = 0;
+    if (input == NULL || incoming == NULL) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    memset(incoming, 0, sizeof(*incoming));
+    while (offset < input_size) {
+        unsigned field, wire_type;
+        MuseLinkWireError result = read_key(input, input_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1) {
+            if (wire_type != 2 || read_delimited(input, input_size, &offset,
+                                                  &service_payload, &service_payload_size) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+        } else if (skip_value(input, input_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    if (service_payload == NULL) return MUSE_LINK_WIRE_INVALID_MESSAGE;
+    offset = 0;
+    while (offset < service_payload_size) {
+        unsigned field, wire_type;
+        const uint8_t *value_bytes;
+        size_t value_size;
+        MuseLinkWireError result = read_key(service_payload, service_payload_size, &offset, &field, &wire_type);
+        if (result != MUSE_LINK_WIRE_OK) return result;
+        if (field == 1) {
+            uint64_t stream_id;
+            if (wire_type != 0 || read_varint(service_payload, service_payload_size, &offset, &stream_id) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            incoming->stream_id = (int64_t)stream_id;
+        } else if (field >= 3 && field <= 5) {
+            if (wire_type != 2 || read_delimited(service_payload, service_payload_size, &offset,
+                                                  &value_bytes, &value_size) != MUSE_LINK_WIRE_OK) {
+                return MUSE_LINK_WIRE_INVALID_MESSAGE;
+            }
+            if (field == 3) {
+                incoming->kind = MUSE_LINK_INCOMING_RESPONSE;
+                result = decode_response_body(value_bytes, value_size, incoming);
+            } else if (field == 4) {
+                incoming->kind = MUSE_LINK_INCOMING_BODY_CHUNK;
+                result = decode_body_chunk(value_bytes, value_size, incoming);
+            } else {
+                incoming->kind = MUSE_LINK_INCOMING_RESET;
+                result = decode_reset(value_bytes, value_size, incoming);
+            }
+            if (result != MUSE_LINK_WIRE_OK) return result;
+        } else if (skip_value(service_payload, service_payload_size, &offset, wire_type) != MUSE_LINK_WIRE_OK) {
+            return MUSE_LINK_WIRE_INVALID_MESSAGE;
+        }
+    }
+    return MUSE_LINK_WIRE_OK;
 }

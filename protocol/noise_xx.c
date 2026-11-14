@@ -16,6 +16,40 @@
 #define NOISE_PHASE_SPLIT 5u
 #define NOISE_MIN_MESSAGE2 (32u + 48u + 16u)
 #define NOISE_MIN_MESSAGE3 (48u + 16u)
+#define NOISE_MAX_SAFE_NONCE ((UINT64_C(1) << 53) - 1)
+
+static const uint8_t low_order_points[][MUSE_NOISE_KEY_BYTES] = {
+    {0},
+    {1},
+    {0xe0, 0xeb, 0x7a, 0x7c, 0x3b, 0x41, 0xb8, 0xae, 0x16, 0x56, 0xe3, 0xfa,
+     0xf1, 0x9f, 0xc4, 0x6a, 0xda, 0x09, 0x8d, 0xeb, 0x9c, 0x32, 0xb1, 0xfd,
+     0x86, 0x62, 0x05, 0x16, 0x5f, 0x49, 0xb8, 0x00},
+    {0x5f, 0x9c, 0x95, 0xbc, 0xa3, 0x50, 0x8c, 0x24, 0xb1, 0xd0, 0xb1, 0x55,
+     0x9c, 0x83, 0xef, 0x5b, 0x04, 0x44, 0x5c, 0xc4, 0x58, 0x1c, 0x8e, 0x86,
+     0xd8, 0x22, 0x4e, 0xdd, 0xd0, 0x9f, 0x11, 0x57},
+    {0xec, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+    {0xed, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+    {0xee, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f},
+};
+
+static int is_low_order_point(const uint8_t point[MUSE_NOISE_KEY_BYTES]) {
+    for (size_t i = 0; i < sizeof(low_order_points) / sizeof(low_order_points[0]); i++) {
+        if (memcmp(point, low_order_points[i], MUSE_NOISE_KEY_BYTES) == 0) return 1;
+    }
+    return 0;
+}
+
+static int next_nonce(uint64_t *nonce, uint64_t *current) {
+    if (*nonce >= NOISE_MAX_SAFE_NONCE) return -1;
+    *current = (*nonce)++;
+    return 0;
+}
 
 static const mbedtls_md_info_t *sha256_info(void) {
     return mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -137,7 +171,9 @@ static int encrypt_and_hash(MuseNoiseXX *noise, const uint8_t *plaintext,
     size_t output_size = plaintext_size;
     int result;
     if (noise->cipher_keyed) {
-        result = aead_encrypt(noise->cipher_key, noise->cipher_nonce++,
+        uint64_t nonce;
+        if (next_nonce(&noise->cipher_nonce, &nonce) != 0) return -1;
+        result = aead_encrypt(noise->cipher_key, nonce,
                               noise->handshake_hash, sizeof(noise->handshake_hash),
                               plaintext, plaintext_size, output);
         output_size += MUSE_NOISE_TAG_BYTES;
@@ -158,7 +194,9 @@ static int decrypt_and_hash(MuseNoiseXX *noise, const uint8_t *ciphertext,
         if (ciphertext_size < MUSE_NOISE_TAG_BYTES) return -1;
         clear_size -= MUSE_NOISE_TAG_BYTES;
         if (clear_size > plaintext_capacity) return -1;
-        result = aead_decrypt(noise->cipher_key, noise->cipher_nonce++,
+        uint64_t nonce;
+        if (next_nonce(&noise->cipher_nonce, &nonce) != 0) return -1;
+        result = aead_decrypt(noise->cipher_key, nonce,
                               noise->handshake_hash, sizeof(noise->handshake_hash),
                               ciphertext, ciphertext_size, plaintext);
     } else {
@@ -193,6 +231,7 @@ static int dh(MuseNoiseXX *noise, const mbedtls_mpi *private_key,
     mbedtls_ecp_point point;
     mbedtls_mpi shared;
     int result;
+    if (is_low_order_point(peer_public)) return -1;
     mbedtls_ecp_point_init(&point);
     mbedtls_mpi_init(&shared);
     result = mbedtls_ecp_point_read_binary(&noise->group, &point,
@@ -321,7 +360,9 @@ MuseNoiseError muse_noise_xx_encrypt(MuseNoiseXX *noise, const uint8_t *plaintex
         return MUSE_NOISE_INVALID_STATE;
     }
     if (ciphertext_capacity < plaintext_size + MUSE_NOISE_TAG_BYTES) return MUSE_NOISE_OUTPUT_TOO_SMALL;
-    if (aead_encrypt(noise->send_key, noise->send_nonce++, NULL, 0,
+    uint64_t nonce;
+    if (next_nonce(&noise->send_nonce, &nonce) != 0) return MUSE_NOISE_CRYPTO;
+    if (aead_encrypt(noise->send_key, nonce, NULL, 0,
                      plaintext, plaintext_size, ciphertext) != 0) return MUSE_NOISE_CRYPTO;
     *ciphertext_size = plaintext_size + MUSE_NOISE_TAG_BYTES;
     return MUSE_NOISE_OK;
@@ -335,7 +376,9 @@ MuseNoiseError muse_noise_xx_decrypt(MuseNoiseXX *noise, const uint8_t *cipherte
         return MUSE_NOISE_INVALID_STATE;
     }
     if (plaintext_capacity < ciphertext_size - MUSE_NOISE_TAG_BYTES) return MUSE_NOISE_OUTPUT_TOO_SMALL;
-    if (aead_decrypt(noise->receive_key, noise->receive_nonce++, NULL, 0,
+    uint64_t nonce;
+    if (next_nonce(&noise->receive_nonce, &nonce) != 0) return MUSE_NOISE_CRYPTO;
+    if (aead_decrypt(noise->receive_key, nonce, NULL, 0,
                      ciphertext, ciphertext_size, plaintext) != 0) return MUSE_NOISE_CRYPTO;
     *plaintext_size = ciphertext_size - MUSE_NOISE_TAG_BYTES;
     return MUSE_NOISE_OK;

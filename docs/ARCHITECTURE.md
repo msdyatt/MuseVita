@@ -20,15 +20,20 @@
 
 ## Vita implementation modules
 
-- `platform/vita_http`: TLS certificate validation, WebSocket client, correct time, network state (planned)
-- `protocol/noise_xx`: the exact initiator state machine is implemented with
-  VitaSDK mbedTLS; fixture interoperability and WSS integration are pending
-- `protocol/link`: shared stream framing is implemented; register/invoke/result and reconnect are planned
-- `protocol/chat`: send message, subscribe, parse events, history, sync
-- `storage/credentials`: local private encrypted credential storage, rotation and revoke
+- `platform/vita_http`: libcurl TLS/WebSocket client, certificate verification,
+  VM lookup, refresh, and network transport (`vita/src/muse_session.c`)
+- `protocol/noise_xx`: the initiator state machine is implemented with VitaSDK
+  mbedTLS and low-order-point rejection; cross-runtime fixture verification remains
+- `protocol/link`: shared stream framing, register/invoke/result, HTTP-over-link
+  request encoding, and response decoding are implemented
+- `protocol/chat`: chat send, NDJSON subscription, and streamed event rendering
+  are implemented; history pagination and reconnect remain
+- `storage/credentials`: one-time plaintext import is converted to an encrypted
+  local credential blob; hardware extraction review, revoke, and rotation remain
 - `ui`: chat, text input, pairing QR, status, notifications
 
-No such modules are falsely represented as built in the initial prototype.
+The transport entries above describe source-level implementation; live-account
+and physical-Vita validation is still a separate release gate.
 
 ## Why the QR does NOT itself authorize Muse
 

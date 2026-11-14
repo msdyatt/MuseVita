@@ -10,6 +10,7 @@ endif()
 
 project(MuseVita C)
 include("$ENV{VITASDK}/share/vita.cmake" REQUIRED)
+find_package(CURL REQUIRED)
 
 set(VITA_TITLEID "MSVT00001")
 set(VITA_VERSION "00.10")
@@ -18,8 +19,10 @@ set(VITA_APP_NAME "MuseVita")
 add_executable(musevita
   src/main.c
   src/chat_state.c
+  src/muse_session.c
   src/network_state.c
   ../protocol/control_framing.c
+  ../protocol/json_extract.c
   ../protocol/link_wire.c
   ../protocol/noise_xx.c
 )
@@ -39,6 +42,9 @@ target_link_libraries(musevita
   SceAppUtil_stub
   SceIme_stub
   SceKernelThreadMgr_stub
+  ${CURL_LIBRARIES}
+  zstd
+  z
   mbedtls
   mbedcrypto
   mbedx509

@@ -25,6 +25,34 @@ void muse_vita_chat_add_message(MuseVitaChatState *state, MuseVitaChatRole role,
     copy_text(state->messages[index].text, text);
 }
 
+void muse_vita_chat_start_assistant(MuseVitaChatState *state) {
+    muse_vita_chat_add_message(state, MUSEVITA_CHAT_ASSISTANT, "");
+}
+
+void muse_vita_chat_append_assistant(MuseVitaChatState *state, const char *text) {
+    MuseVitaChatMessage *message;
+    size_t current_size;
+    size_t remaining;
+    if (state->message_count == 0) muse_vita_chat_start_assistant(state);
+    message = &state->messages[state->message_count - 1];
+    if (message->role != MUSEVITA_CHAT_ASSISTANT) {
+        muse_vita_chat_start_assistant(state);
+        message = &state->messages[state->message_count - 1];
+    }
+    current_size = strlen(message->text);
+    remaining = MUSEVITA_CHAT_MAX_TEXT - 1 - current_size;
+    if (remaining == 0 || text == NULL) return;
+    strncat(message->text, text, remaining);
+}
+
+void muse_vita_chat_replace_last_assistant(MuseVitaChatState *state, const char *text) {
+    if (state->message_count == 0 ||
+        state->messages[state->message_count - 1].role != MUSEVITA_CHAT_ASSISTANT) {
+        muse_vita_chat_start_assistant(state);
+    }
+    copy_text(state->messages[state->message_count - 1].text, text);
+}
+
 void muse_vita_chat_set_draft(MuseVitaChatState *state, const char *text) {
     copy_text(state->draft, text);
     state->draft_ready = state->draft[0] != '\0';

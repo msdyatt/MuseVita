@@ -9,13 +9,12 @@ An unofficial, open-source PlayStation Vita client for Meta Muse. The planned
 Nintendo 3DS client will be called MuseDS; portable protocol code is being kept
 outside Vita-specific UI and networking so the two clients can share it.
 
-> **Status: native VPK and protocol-foundation milestone.** MuseVita now has a
-> real VitaSDK/CMake build, a packaged VPK, a controller-navigable
-> status/setup/chat UI, a mockable Wi-Fi state provider, host-tested
-> control-stream/link builders, and a Vita-built Noise XX initiator. It is not
-> yet a live Muse client: pairing, credential storage/transfer, WSS session
-> integration, VM lookup, chat requests, fixture interoperability, and real
-> Vita hardware testing remain outstanding.
+> **Status: native transport-integration milestone.** MuseVita now has a real
+> VitaSDK/CMake build, a packaged VPK, native status/setup/chat UI, encrypted
+> local credential storage, direct HTTPS VM lookup, libcurl WSS transport,
+> Noise XX, link registration, chat send, and streamed chat-event handling.
+> The authenticated path still requires a real user-owned official pairing
+> import and validation on a physical Vita before it can be called release-ready.
 
 ## Product goal
 
@@ -32,19 +31,30 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Native Vita UI and controller navigation | Implemented and built into the VPK |
 | Vita Wi-Fi status provider | Implemented; host-mockable interface is in place |
 | VitaSDK/CMake packaging | Built with VitaSDK 2026.08 and `libvita2d` |
-| Shared control-stream framing and link wire builders | Implemented and host-tested |
-| Noise XX initiator using VitaSDK mbedTLS | Source implemented and Vita-built; fixture interoperability not verified |
+| Shared control-stream framing, link wire builders, and decoders | Implemented and host-tested |
+| Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime fixture still pending |
 | Local QR setup page | Demo only; local-development use |
-| Approved Meta pairing and one-time transfer | Not implemented |
-| Protected local credential storage | Not implemented |
-| HTTPS certificate validation and VM lookup | Not implemented |
-| WSS upgrade and encrypted link session | Not implemented |
-| Native chat view, bounded history, and Vita IME composer | Implemented; transport remains offline |
-| Direct chat send/subscribe and streamed replies | Not implemented |
+| Approved Meta pairing and one-time transfer | Official pairing-state import implemented; on-device BLE pairing is not |
+| Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
+| HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
+| WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
+| Native chat view, bounded history, and Vita IME composer | Implemented and connected to streamed transport events |
+| Direct chat send/subscribe and streamed replies | Implemented in the native source; account/hardware validation pending |
 | Vita hardware installation/playability | Not tested in this environment |
 
 The VPK is a build artifact, not evidence of a live Muse connection. Do not
 enter real tokens into the demo website or commit pairing state.
+
+## One-time official pairing import
+
+MuseVita does not accept a Muse password, browser cookie, or invented token. Use
+the official Gadget SDK flow on a supported BLE host to pair the Vita identity,
+then stop the host's gadget service so only one device registration is active.
+Copy the matching `identity.json` and `pairing.json` to
+`ux0:data/MuseVita/` with VitaShell. On first launch MuseVita imports the
+official access and refresh tokens into `credentials.bin`, removes the
+plaintext `pairing.json`, and uses direct Wi-Fi thereafter. The Vita does not
+currently perform the BLE peripheral pairing step itself.
 
 ## Build the Vita application
 

@@ -63,6 +63,21 @@ class ControlFramingTests(unittest.TestCase):
             self.assertEqual(json.loads(register)["method"], "link.register")
             self.assertEqual(json.loads(chat)["device_id"], "homelink-000001")
 
+    def test_json_extractor_handles_api_and_chat_fields(self):
+        compiler = shutil.which("cc") or shutil.which("clang") or shutil.which("gcc")
+        if compiler is None:
+            self.skipTest("no host C compiler available")
+        root = Path(__file__).resolve().parents[1]
+        with tempfile.TemporaryDirectory() as temp_dir:
+            binary = Path(temp_dir) / "test_json_extract"
+            subprocess.run(
+                [compiler, "-std=c99", "-Wall", "-Wextra", "-Werror", "-I",
+                 str(root / "protocol"), str(root / "protocol" / "json_extract.c"),
+                 str(root / "tests" / "test_json_extract.c"), "-o", str(binary)],
+                check=True,
+            )
+            subprocess.run([str(binary)], check=True)
+
 
 if __name__ == "__main__":
     unittest.main()

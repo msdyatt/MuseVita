@@ -5,18 +5,57 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define MUSE_LINK_MAX_NOISE_CHUNK_BYTES 65489u
+#define MUSE_LINK_MAX_NOISE_CHUNKS 256u
+
 typedef enum MuseLinkWireError {
     MUSE_LINK_WIRE_OK = 0,
     MUSE_LINK_WIRE_INVALID_ARGUMENT = -1,
     MUSE_LINK_WIRE_OUTPUT_TOO_SMALL = -2,
     MUSE_LINK_WIRE_VALUE_TOO_LARGE = -3,
+    MUSE_LINK_WIRE_INVALID_MESSAGE = -4,
 } MuseLinkWireError;
+
+typedef struct MuseLinkHeader {
+    const char *key;
+    const char *value;
+} MuseLinkHeader;
+
+typedef enum MuseLinkIncomingKind {
+    MUSE_LINK_INCOMING_RESPONSE = 0,
+    MUSE_LINK_INCOMING_BODY_CHUNK = 1,
+    MUSE_LINK_INCOMING_RESET = 2,
+} MuseLinkIncomingKind;
+
+typedef struct MuseLinkIncoming {
+    MuseLinkIncomingKind kind;
+    int64_t stream_id;
+    int status;
+    int end_body;
+    const uint8_t *body;
+    size_t body_size;
+    int reset_code;
+} MuseLinkIncoming;
+
+typedef struct MuseLinkNoiseFrame {
+    int64_t chunk_id;
+    uint32_t chunk_index;
+    uint32_t total_chunks;
+    const uint8_t *payload;
+    size_t payload_size;
+} MuseLinkNoiseFrame;
 
 MuseLinkWireError muse_link_encode_open_stream_request(
     int64_t stream_id, uint8_t *output, size_t capacity, size_t *output_size);
 
 MuseLinkWireError muse_link_encode_body_chunk(
     int64_t stream_id, const uint8_t *body, size_t body_size, int end_body,
+    uint8_t *output, size_t capacity, size_t *output_size);
+
+MuseLinkWireError muse_link_encode_http_request(
+    int64_t stream_id, const char *method, const char *path,
+    const MuseLinkHeader *headers, size_t header_count,
+    const uint8_t *body, size_t body_size, int end_body,
     uint8_t *output, size_t capacity, size_t *output_size);
 
 MuseLinkWireError muse_link_encode_noise_frame(
@@ -31,5 +70,11 @@ MuseLinkWireError muse_link_build_register_message(
 MuseLinkWireError muse_link_build_chat_request(
     const char *message, const char *node_id,
     char *output, size_t capacity, size_t *output_size);
+
+MuseLinkWireError muse_link_decode_noise_frame(
+    const uint8_t *input, size_t input_size, MuseLinkNoiseFrame *frame);
+
+MuseLinkWireError muse_link_decode_service_response(
+    const uint8_t *input, size_t input_size, MuseLinkIncoming *incoming);
 
 #endif

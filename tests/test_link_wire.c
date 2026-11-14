@@ -24,5 +24,47 @@ int main(void) {
                                        json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
     json[json_size] = '\0';
     puts(json);
+
+    {
+        static const uint8_t response[] = {
+            0x0a, 0x0d, 0x08, 0x01, 0x1a, 0x09,
+            0x08, 0xc8, 0x01, 0x1a, 0x02, 'o', 'k', 0x20, 0x01,
+        };
+        MuseLinkIncoming incoming;
+        assert(muse_link_decode_service_response(response, sizeof(response), &incoming) == MUSE_LINK_WIRE_OK);
+        assert(incoming.kind == MUSE_LINK_INCOMING_RESPONSE);
+        assert(incoming.stream_id == 1);
+        assert(incoming.status == 200);
+        assert(incoming.end_body == 1);
+        assert(incoming.body_size == 2 && memcmp(incoming.body, "ok", 2) == 0);
+    }
+
+    {
+        static const uint8_t noise_frame[] = {0x08, 0x07, 0x18, 0x01, 0x22, 0x03, 'a', 'b', 'c'};
+        MuseLinkNoiseFrame frame;
+        assert(muse_link_decode_noise_frame(noise_frame, sizeof(noise_frame), &frame) == MUSE_LINK_WIRE_OK);
+        assert(frame.chunk_id == 7 && frame.chunk_index == 0 && frame.total_chunks == 1);
+        assert(frame.payload_size == 3 && memcmp(frame.payload, "abc", 3) == 0);
+    }
+
+    {
+        const MuseLinkHeader headers[] = {
+            {"Content-Type", "application/json"},
+            {"x-request-id", "req-1"},
+        };
+        assert(muse_link_encode_http_request(2, "POST", "/chat/subscribe",
+                                             headers, 2, (const uint8_t *)"{}", 2, 1,
+                                             proto, sizeof(proto), &proto_size) == MUSE_LINK_WIRE_OK);
+        assert(proto_size > 20);
+    }
+    {
+        uint8_t large_body[60000];
+        uint8_t large_output[70000];
+        memset(large_body, 'x', sizeof(large_body));
+        assert(muse_link_encode_http_request(3, "POST", "/chat/stream", NULL, 0,
+                                             large_body, sizeof(large_body), 1,
+                                             large_output, sizeof(large_output), &proto_size) == MUSE_LINK_WIRE_OK);
+        assert(proto_size > sizeof(large_body));
+    }
     return 0;
 }

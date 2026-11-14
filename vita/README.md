@@ -1,6 +1,10 @@
 # MuseVita native application
 
-This is a native UI and protocol-framing foundation, not yet an authenticated Muse client. It renders a Vita-specific status/setup/chat screen, reads the Vita Wi-Fi state, and responds to controller input. **Do not interpret an installed VPK as a verified connection to Muse.**
+This is a native Vita UI and direct Muse Gadget SDK transport client. It renders
+a Vita-specific status/setup/chat screen, reads the Vita Wi-Fi state, imports
+official pairing state, and uses direct HTTPS/WSS transport. **Do not interpret
+an installed VPK as a verified connection to Muse until a user-owned pairing is
+tested on physical hardware.**
 
 ## Build prerequisites
 
@@ -21,21 +25,25 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 
 ## Controls
 
-- X: next page
+- X: next page; on Chat, open the Vita text composer
 - Circle: previous page
+- Square: send the current Chat draft
+- Triangle: open the web fallback
 - START: exit
 
-## Not implemented
+## Current limitations
 
-- Real-time Muse chat, token refresh, pairing transfer, WSS session integration, local credential storage, IME keyboard, QR scanner or display.
-- A functional website-to-Vita pairing link. The web page remains a local demo only.
+- On-device BLE pairing, QR scanning, chat history pagination, reconnect, and
+  camera/microphone capabilities are not implemented yet.
+- Cross-runtime Noise fixture tests and validation against a real user-owned
+  Muse account on a physical Vita are still required.
 
 The portable `protocol/control_framing.*` module is shared-code groundwork for
 MuseVita and the planned MuseDS client. It implements the official SDK's
 little-endian length-prefixed control-message framing and is host-tested. The
 portable `protocol/noise_xx.*` module implements the official Noise XX
 initiator with VitaSDK mbedTLS and is included in the VPK build; it still needs
-fixture interoperability tests and a real WSS peer. Neither module handles
-pairing credentials.
+fixture interoperability tests and a real WSS peer. Credential import and
+encrypted local storage live in `src/muse_session.c`.
 
 The network/crypto implementation must be tested against Meta's SDK test fixtures before credentials are ever used on the handheld.

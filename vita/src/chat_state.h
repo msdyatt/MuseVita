@@ -26,6 +26,9 @@ typedef struct MuseVitaChatState {
 
 void muse_vita_chat_init(MuseVitaChatState *state);
 void muse_vita_chat_add_message(MuseVitaChatState *state, MuseVitaChatRole role, const char *text);
+void muse_vita_chat_start_assistant(MuseVitaChatState *state);
+void muse_vita_chat_append_assistant(MuseVitaChatState *state, const char *text);
+void muse_vita_chat_replace_last_assistant(MuseVitaChatState *state, const char *text);
 void muse_vita_chat_set_draft(MuseVitaChatState *state, const char *text);
 void muse_vita_chat_clear_draft(MuseVitaChatState *state);
 
