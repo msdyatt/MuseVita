@@ -30,7 +30,10 @@ add_executable(musevita
   ../protocol/noise_xx.c
 )
 target_include_directories(musevita PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../protocol)
-target_compile_options(musevita PRIVATE -Wall -Wextra -O2)
+# Keep the native executable below Vita's fixed ELF segment boundary. The
+# transport is latency-bound on network I/O, so size optimization is a better
+# fit than spending code space on a small speed gain.
+target_compile_options(musevita PRIVATE -Wall -Wextra -Os)
 target_link_libraries(musevita
   vita2d
   SceAppMgr_stub

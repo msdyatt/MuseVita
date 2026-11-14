@@ -82,6 +82,12 @@ MuseLinkWireError muse_link_build_command_result(
     const char *media_type, size_t media_size,
     char *output, size_t capacity, size_t *output_size);
 
+/* Standard Muse camera.capture result. The JPEG is returned to Muse directly
+   instead of being posted as a new chat message. */
+MuseLinkWireError muse_link_build_camera_result(
+    const char *request_id, const uint8_t *data, size_t data_size,
+    char *output, size_t capacity, size_t *output_size);
+
 MuseLinkWireError muse_link_build_guide_result(
     const char *request_id, char *output, size_t capacity, size_t *output_size);
 

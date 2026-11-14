@@ -21,7 +21,8 @@ int main(void) {
     assert(strstr(json, "homelink-000001") != NULL);
     assert(strstr(json, "musevita-psvita") != NULL);
     assert(strstr(json, "device.guide") != NULL);
-    assert(strstr(json, "vita.camera_capture") != NULL);
+    assert(strstr(json, "camera.capture") != NULL);
+    assert(strstr(json, "vita.camera_capture") == NULL);
     assert(strstr(json, "vita.microphone_record") != NULL);
 
     assert(muse_link_build_chat_request("hello", "homelink-000001",
@@ -97,6 +98,14 @@ int main(void) {
         json[json_size] = '\0';
         assert(strstr(json, "\"method\":\"link.result\"") != NULL);
         assert(strstr(json, "\"bytes\":1234") != NULL);
+    }
+    {
+        static const uint8_t jpeg[] = {0xff, 0xd8, 0xff, 0xd9};
+        assert(muse_link_build_camera_result("invoke-camera", jpeg, sizeof(jpeg),
+                                             json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);
+        json[json_size] = '\0';
+        assert(strstr(json, "\"format\":\"jpeg-base64\"") != NULL);
+        assert(strstr(json, "\"data_base64\":\"/9j/2Q==\"") != NULL);
     }
     {
         assert(muse_link_build_guide_result("invoke-guide", json, sizeof(json), &json_size) == MUSE_LINK_WIRE_OK);

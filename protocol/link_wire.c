@@ -11,6 +11,8 @@
 
 static MuseLinkWireError append_string(uint8_t *output, size_t capacity, size_t *offset,
                                        unsigned field, const char *value);
+static MuseLinkWireError json_base64(char *output, size_t capacity, size_t *offset,
+                                     const uint8_t *data, size_t data_size);
 
 static MuseLinkWireError append_bytes(uint8_t *output, size_t capacity, size_t *offset,
                                       const uint8_t *data, size_t data_size) {
@@ -276,7 +278,7 @@ MuseLinkWireError muse_link_build_register_message(
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "node_id", node_id, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_pair(output, capacity, &offset, "display_name", display_name, &first);
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset,
-        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"musevita-psvita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{\"device.guide\":{\"description\":\"Describe MuseVita capabilities and controls.\",\"required\":{},\"optional\":{},\"timeout_ms\":5000},\"vita.camera_capture\":{\"description\":\"Capture a 320x240 JPEG photo and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000},\"vita.microphone_record\":{\"description\":\"Record a two-second voice note and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000}}}");
+        ",\"platform\":\"vita\",\"version\":\"0.1.0\",\"device_family\":\"gadget\",\"model_id\":\"musevita-psvita\",\"metadata\":{\"model_name\":\"PlayStation Vita\"},\"is_wakeup_supported\":false,\"commands_v2\":{\"device.guide\":{\"description\":\"Describe MuseVita capabilities and controls.\",\"required\":{},\"optional\":{},\"timeout_ms\":5000},\"camera.capture\":{\"description\":\"Capture one still 320x240 JPEG frame and return it as base64.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000},\"vita.microphone_record\":{\"description\":\"Record a two-second voice note and send it to this Muse conversation.\",\"required\":{},\"optional\":{},\"timeout_ms\":30000}}}");
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
@@ -305,6 +307,26 @@ MuseLinkWireError muse_link_build_command_result(
                                                                error == NULL ? "command failed" : error);
     }
     if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "}");
+    if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
+    return result;
+}
+
+MuseLinkWireError muse_link_build_camera_result(
+    const char *request_id, const uint8_t *data, size_t data_size,
+    char *output, size_t capacity, size_t *output_size) {
+    size_t offset = 0;
+    MuseLinkWireError result;
+    if (request_id == NULL || output == NULL || output_size == NULL ||
+        (data == NULL && data_size != 0)) return MUSE_LINK_WIRE_INVALID_ARGUMENT;
+    *output_size = 0;
+    result = json_format(output, capacity, &offset, "{\"method\":\"link.result\",\"id\":");
+    if (result == MUSE_LINK_WIRE_OK) result = json_string(output, capacity, &offset, request_id);
+    if (result == MUSE_LINK_WIRE_OK) {
+        result = json_format(output, capacity, &offset,
+                             ",\"ok\":true,\"payload\":{\"format\":\"jpeg-base64\",\"data_base64\":\"");
+    }
+    if (result == MUSE_LINK_WIRE_OK) result = json_base64(output, capacity, &offset, data, data_size);
+    if (result == MUSE_LINK_WIRE_OK) result = json_format(output, capacity, &offset, "\"}}");
     if (result == MUSE_LINK_WIRE_OK) *output_size = offset;
     return result;
 }

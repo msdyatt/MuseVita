@@ -588,15 +588,38 @@ static int send_link_payload(MuseVitaSession *session, const uint8_t *payload, s
 }
 
 static int send_control_json(MuseVitaSession *session, const char *message, size_t message_size) {
-    uint8_t framed[8192];
-    size_t framed_size = 0;
-    if (muse_control_encode((const uint8_t *)message, message_size,
-                            framed, sizeof(framed), &framed_size) != MUSE_CONTROL_OK) return -1;
+    enum { CONTROL_BODY_CHUNK_BYTES = 16 * 1024 };
+    uint8_t framed[CONTROL_BODY_CHUNK_BYTES];
+    size_t framed_offset = 0;
+    size_t total_size;
+    if (session == NULL || message == NULL || message_size > MUSE_CONTROL_MAX_MESSAGE_BYTES ||
+        message_size > SIZE_MAX - sizeof(uint32_t)) return -1;
+    total_size = sizeof(uint32_t) + message_size;
+    framed[0] = (uint8_t)(message_size & 0xffu);
+    framed[1] = (uint8_t)((message_size >> 8) & 0xffu);
+    framed[2] = (uint8_t)((message_size >> 16) & 0xffu);
+    framed[3] = (uint8_t)((message_size >> 24) & 0xffu);
     /* /link-control is a long-lived request. Each length-prefixed JSON
-       message is a body chunk, not the end of the HTTP request. */
-    if (muse_link_encode_body_chunk(session->control_stream_id, framed, framed_size, 0,
-                                    session->frame_buffer, sizeof(session->frame_buffer), &framed_size) != MUSE_LINK_WIRE_OK) return -1;
-    return send_link_payload(session, session->frame_buffer, framed_size);
+       message is a body chunk, not the end of the HTTP request. Split the
+       control frame only at the transport body-chunk boundary; the decoder
+       reassembles the four-byte length prefix and JSON message. */
+    while (framed_offset < total_size) {
+        size_t chunk_size = total_size - framed_offset;
+        size_t encoded_size = 0;
+        if (chunk_size > sizeof(framed)) chunk_size = sizeof(framed);
+        for (size_t i = 0; i < chunk_size; i++) {
+            size_t source_offset = framed_offset + i;
+            framed[i] = source_offset < sizeof(uint32_t)
+                ? framed[source_offset]
+                : (uint8_t)message[source_offset - sizeof(uint32_t)];
+        }
+        if (muse_link_encode_body_chunk(session->control_stream_id, framed, chunk_size, 0,
+                                        session->frame_buffer, sizeof(session->frame_buffer),
+                                        &encoded_size) != MUSE_LINK_WIRE_OK ||
+            send_link_payload(session, session->frame_buffer, encoded_size) != 0) return -1;
+        framed_offset += chunk_size;
+    }
+    return 0;
 }
 
 static int send_register(MuseVitaSession *session) {
@@ -694,16 +717,18 @@ static MuseControlError control_message(const uint8_t *message, size_t message_s
                 return MUSE_CONTROL_INVALID_ARGUMENT;
             }
             return MUSE_CONTROL_OK;
-        } else if (strcmp(command, "vita.camera_capture") == 0) {
+        } else if (strcmp(command, "camera.capture") == 0 ||
+                   strcmp(command, "vita.camera_capture") == 0) {
             media_type = "image";
             if (muse_vita_capture_photo_jpeg(session->media_capture_buffer,
                                              sizeof(session->media_capture_buffer), &media_size) == 0 &&
-                muse_vita_session_send_media(session, "Please analyze this image.", "image",
-                                             "image/jpeg", "vita-camera.jpg",
-                                             session->media_capture_buffer, media_size) == 0) {
-                success = 1;
+                muse_link_build_camera_result(request_id, session->media_capture_buffer, media_size,
+                                              session->media_buffer, sizeof(session->media_buffer),
+                                              &result_size) == MUSE_LINK_WIRE_OK &&
+                send_control_json(session, session->media_buffer, result_size) == 0) {
+                return MUSE_CONTROL_OK;
             } else {
-                error = "camera capture or send failed";
+                error = "camera capture or result encoding failed";
             }
         } else if (strcmp(command, "vita.microphone_record") == 0) {
             media_type = "file";
