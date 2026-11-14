@@ -931,10 +931,15 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     if (muse_link_encode_open_stream_request(session->control_stream_id, session->frame_buffer,
                                               sizeof(session->frame_buffer), &message_size) != MUSE_LINK_WIRE_OK ||
         send_link_payload(session, session->frame_buffer, message_size) != 0 || send_register(session) != 0) goto fail;
-    for (unsigned i = 0; i < 200 && !session->registered; i++) {
-        int result = muse_vita_session_poll(session);
-        if (result < 0) goto fail;
-        sceKernelDelayThread(10000);
+    {
+        const uint64_t registration_deadline =
+            (uint64_t)sceKernelGetSystemTimeWide() + HANDSHAKE_TIMEOUT_US;
+        while (!session->registered &&
+               (uint64_t)sceKernelGetSystemTimeWide() < registration_deadline) {
+            int result = muse_vita_session_poll(session);
+            if (result < 0) goto fail;
+            sceKernelDelayThread(10000);
+        }
     }
     if (!session->registered || send_subscribe(session) != 0) goto fail;
     session->state = MUSEVITA_SESSION_CONNECTED;
