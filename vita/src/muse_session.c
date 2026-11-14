@@ -495,7 +495,9 @@ static int refresh_credentials(MuseVitaSession *session) {
         !muse_json_find_string(response_data, response.size, "access_token",
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string(response_data, response.size, "refresh_token",
-                               session->refresh_token, sizeof(session->refresh_token))) return -1;
+                               session->refresh_token, sizeof(session->refresh_token))) {
+        return status == 401 ? -2 : -1;
+    }
     (void)delete_file(PAIRING_PATH);
     return save_encrypted_credentials(session);
 }
@@ -945,7 +947,7 @@ static int start_history_request(MuseVitaSession *session) {
     stream_id = session->next_stream_id++;
     begin_request(session, stream_id);
     session->request_is_history = true;
-    if (muse_link_encode_http_request(stream_id, "GET", "/chat/history?limit=4",
+    if (muse_link_encode_http_request(stream_id, "GET", "/chat/history?limit=1",
                                       headers, sizeof(headers) / sizeof(headers[0]),
                                       NULL, 0, 1, session->frame_buffer,
                                       sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
@@ -1075,7 +1077,15 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     session->state = MUSEVITA_SESSION_CONNECTING;
     {
         int fetch_result = fetch_vm(session);
-        if (fetch_result == -2 && refresh_credentials(session) == 0) fetch_result = fetch_vm(session);
+        if (fetch_result == -2) {
+            int refresh_result = refresh_credentials(session);
+            if (refresh_result == 0) {
+                fetch_result = fetch_vm(session);
+            } else if (refresh_result == -2) {
+                forget_pairing(session);
+                return -1;
+            }
+        }
         if (fetch_result != 0) {
             set_transport_error(session);
             return -1;

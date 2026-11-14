@@ -13,7 +13,7 @@
 1. Initial authorization is currently BLE-based via Muse mobile application and `pairing_client_hello` / `pairing_encrypted` / `provision_v2` exchanges.
 2. Community pairing v5 includes P-256 ECDH, HKDF-SHA256 and AES-256-GCM. The SDK obtains device access/refresh credentials and VM info. SDK tokens must be user-owned.
 3. Paired gadget fetches its VM and connects to `wss://<noise_host>/v1/noise?vm_id=<id>` with a per-VM bearer; upgrade is followed by Noise XX session establishment.
-4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages, `GET /chat/history?limit=4` for a bounded initial transcript, and `/chat/subscribe` for live events. The history request is optional and bounded; live subscription remains the source of new events. See the SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
+4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages, `GET /chat/history?limit=1` for one bounded initial item, and `/chat/subscribe` for live events. The history request is optional and bounded; live subscription remains the source of new events. See the SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
 5. Token lifecycle includes refresh and reconnection; temporary setup hosts must shut down before Vita uses the same persistent identity to avoid concurrent active sessions.
 
 **Do not guess any cryptographic framing from this document.** Port the SDK's exact fixture-tested behavior. Inspect `linux/tests/vectors/` and `linux/tests/test_link_client.py` in the current SDK source, and validate with the real service before shipping.

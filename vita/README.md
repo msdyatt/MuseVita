@@ -38,7 +38,7 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 
 - On-device BLE pairing and QR scanning are not implemented on the Vita itself;
   the official three-file pairing import and phone-assisted encrypted transfer
-  are implemented. The app requests a bounded recent history page after the
+  are implemented. The app requests one bounded recent history item after the
   live subscription opens, then continues with live events; older-page
   pagination is not implemented;
   camera/microphone capture still needs

@@ -38,6 +38,12 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('"/pairing-crypto.js"', source)
         self.assertIn('"text/javascript; charset=utf-8"', source)
 
+    def test_history_and_expired_auth_follow_sdk_bounds(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        self.assertIn('"/chat/history?limit=1"', source)
+        self.assertIn("return status == 401 ? -2 : -1;", source)
+        self.assertIn("forget_pairing(session);", source)
+
 
 if __name__ == "__main__":
     unittest.main()
