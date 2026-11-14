@@ -127,6 +127,12 @@ static void close_transport(MuseVitaSession *session) {
     session->deferred_chat_size = 0;
 }
 
+static void clear_deferred_chat(MuseVitaSession *session) {
+    session->awaiting_chat_ack = false;
+    session->deferred_chat_overflow = false;
+    session->deferred_chat_size = 0;
+}
+
 static void set_transport_error(MuseVitaSession *session) {
     close_transport(session);
     session->state = MUSEVITA_SESSION_ERROR;
@@ -679,10 +685,12 @@ static int wait_for_request(MuseVitaSession *session) {
     while (session->request_active && !session->request_done) {
         if (muse_vita_session_poll(session) != 0) {
             session->request_active = false;
+            clear_deferred_chat(session);
             return -1;
         }
         if ((uint64_t)sceKernelGetSystemTimeWide() >= deadline) {
             session->request_active = false;
+            clear_deferred_chat(session);
             return -1;
         }
         sceKernelDelayThread(10000);
@@ -690,9 +698,7 @@ static int wait_for_request(MuseVitaSession *session) {
     if (!session->request_done || session->request_failed ||
         session->request_status < 200 || session->request_status >= 300) {
         session->request_active = false;
-        session->awaiting_chat_ack = false;
-        session->deferred_chat_size = 0;
-        session->deferred_chat_overflow = false;
+        clear_deferred_chat(session);
         return -1;
     }
     session->request_active = false;
@@ -716,12 +722,10 @@ static int wait_for_request(MuseVitaSession *session) {
         if (session->deferred_chat_overflow ||
             consume_chat_bytes(session, (const uint8_t *)session->deferred_chat_buffer,
                                session->deferred_chat_size) != 0) {
-            session->deferred_chat_size = 0;
-            session->deferred_chat_overflow = false;
+            clear_deferred_chat(session);
             return -1;
         }
-        session->deferred_chat_size = 0;
-        session->deferred_chat_overflow = false;
+        clear_deferred_chat(session);
     }
     return 0;
 }
@@ -1266,8 +1270,7 @@ int muse_vita_session_send_chat(MuseVitaSession *session, const char *message) {
                                       session->frame_buffer, sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
         send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
         session->request_active = false;
-        session->awaiting_chat_ack = false;
-        session->deferred_chat_size = 0;
+        clear_deferred_chat(session);
         return -1;
     }
     return wait_for_request(session);
@@ -1305,8 +1308,7 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
                                       sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
         send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
         session->request_active = false;
-        session->awaiting_chat_ack = false;
-        session->deferred_chat_size = 0;
+        clear_deferred_chat(session);
         return -1;
     }
     for (size_t offset = 0; offset < body_size;) {
@@ -1319,8 +1321,7 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
                                         sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
             send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
             session->request_active = false;
-            session->awaiting_chat_ack = false;
-            session->deferred_chat_size = 0;
+            clear_deferred_chat(session);
             return -1;
         }
         offset += chunk_size;
