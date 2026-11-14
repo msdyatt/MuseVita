@@ -15,6 +15,7 @@
 #include "vita_media.h"
 
 #define PAIRING_PATH "ux0:data/MuseVita/pairing.json"
+#define SDK_TOKEN_PATH "ux0:data/MuseVita/sdk_token"
 #define CREDENTIALS_PATH "ux0:data/MuseVita/credentials.bin"
 #define IDENTITY_PATH "ux0:data/MuseVita/identity.json"
 #define API_URL "https://api.muse.ai/fetch_vms"
@@ -33,6 +34,24 @@ typedef struct ResponseBuffer {
 } ResponseBuffer;
 
 static void make_identity(MuseVitaSession *session, const char *json, size_t json_size);
+static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
+
+static int load_sdk_token_file(MuseVitaSession *session) {
+    char token[sizeof(session->sdk_token)];
+    size_t token_size = 0;
+    size_t start = 0;
+    size_t end;
+    if (read_file(SDK_TOKEN_PATH, token, sizeof(token), &token_size) != 0) return -1;
+    while (start < token_size && (token[start] == ' ' || token[start] == '\t' ||
+                                  token[start] == '\r' || token[start] == '\n')) start++;
+    end = token_size;
+    while (end > start && (token[end - 1] == ' ' || token[end - 1] == '\t' ||
+                           token[end - 1] == '\r' || token[end - 1] == '\n')) end--;
+    if (end == start || end - start >= sizeof(session->sdk_token)) return -1;
+    memcpy(session->sdk_token, token + start, end - start);
+    session->sdk_token[end - start] = '\0';
+    return 0;
+}
 
 static void make_request_id(char output[40]) {
     uint64_t time = (uint64_t)sceKernelGetSystemTimeWide();
@@ -266,8 +285,17 @@ static void make_identity(MuseVitaSession *session, const char *json, size_t jso
 int muse_vita_session_load_pairing(MuseVitaSession *session) {
     char pairing[16384];
     size_t pairing_size = 0;
+    int encrypted_loaded;
     if (session == NULL) return -1;
-    if (load_encrypted_credentials(session) == 0) {
+    encrypted_loaded = load_encrypted_credentials(session) == 0;
+    if (encrypted_loaded) {
+        if (session->sdk_token[0] == '\0' && load_sdk_token_file(session) == 0) {
+            if (save_encrypted_credentials(session) != 0) {
+                session->state = MUSEVITA_SESSION_NO_PAIRING;
+                return -1;
+            }
+            (void)delete_file(SDK_TOKEN_PATH);
+        }
         session->state = MUSEVITA_SESSION_READY;
         return 0;
     }
@@ -284,11 +312,13 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
     }
     (void)muse_json_find_string(pairing, pairing_size, "sdk_token",
                                 session->sdk_token, sizeof(session->sdk_token));
+    if (session->sdk_token[0] == '\0') (void)load_sdk_token_file(session);
     if (save_encrypted_credentials(session) != 0) {
         session->state = MUSEVITA_SESSION_NO_PAIRING;
         return -1;
     }
     (void)delete_file(PAIRING_PATH);
+    (void)delete_file(SDK_TOKEN_PATH);
     session->state = MUSEVITA_SESSION_READY;
     return 0;
 }

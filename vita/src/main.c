@@ -88,7 +88,7 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network,
 static void draw_setup_page(vita2d_pgf *font) {
     text(font, 70, 192, 29, WHITE, "One-time Muse setup");
     text(font, 70, 233, 19, WHITE, "1. Pair the Vita identity with an official BLE host");
-    text(font, 70, 270, 19, WHITE, "2. Copy the approved pairing state with VitaShell");
+    text(font, 70, 270, 19, WHITE, "2. Copy identity, pairing, and SDK token files");
     text(font, 70, 307, 19, WHITE, "3. Use direct Wi-Fi after setup");
     text(font, 70, 344, 19, MUTED, "Bluetooth is needed only during provisioning.");
     vita2d_draw_rectangle(70, 370, 820, 44, BORDER);

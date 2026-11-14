@@ -36,7 +36,8 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
 ## Current limitations
 
 - On-device BLE pairing, QR scanning, and chat history pagination are not
-  implemented yet. Camera/microphone capture is implemented but still needs
+  implemented yet. The official three-file pairing import is implemented;
+  camera/microphone capture still needs
   physical Vita testing with an authenticated Muse account. Transport
   reconnect retries after a bounded delay when the imported credentials remain
   valid.

@@ -51,11 +51,14 @@ enter real tokens into the demo website or commit pairing state.
 MuseVita does not accept a Muse password, browser cookie, or invented token. Use
 the official Gadget SDK flow on a supported BLE host to pair the Vita identity,
 then stop the host's gadget service so only one device registration is active.
-Copy the matching `identity.json` and `pairing.json` to
-`ux0:data/MuseVita/` with VitaShell. On first launch MuseVita imports the
-official access and refresh tokens into `credentials.bin`, removes the
-plaintext `pairing.json`, and uses direct Wi-Fi thereafter. The Vita does not
-currently perform the BLE peripheral pairing step itself.
+Copy the matching `identity.json`, `pairing.json`, and `sdk_token` to
+`ux0:data/MuseVita/` with VitaShell. The token file is the official Gadget SDK
+token file, not a browser cookie or Muse password. On first launch MuseVita
+imports the official access and refresh tokens plus SDK token into
+`credentials.bin`, removes the plaintext bundle, and uses direct Wi-Fi
+thereafter. The Vita does not currently perform the BLE peripheral pairing
+step itself; the one-time BLE pairing must be completed by a supported host
+using the same identity before these files are moved to the Vita.
 
 ## Build the Vita application
 
