@@ -15,6 +15,7 @@
 #define MUSEVITA_MAX_ASSEMBLY_BYTES (2u * 1024u * 1024u)
 #define MUSEVITA_MAX_FRAME_BYTES (512u * 1024u)
 #define MUSEVITA_MEDIA_BUFFER_BYTES (384u * 1024u)
+#define MUSEVITA_MAX_DEFERRED_CHAT_BYTES (256u * 1024u)
 
 typedef enum MuseVitaSessionState {
     MUSEVITA_SESSION_NO_PAIRING = 0,
@@ -58,8 +59,12 @@ typedef struct MuseVitaSession {
     bool request_failed;
     bool request_is_history;
     bool history_requested;
+    bool awaiting_chat_ack;
+    bool deferred_chat_overflow;
+    size_t deferred_chat_size;
     char active_assistant_id[128];
     char last_user_id[128];
+    char last_rendered_user_id[128];
     char register_request_id[40];
     char access_token[2048];
     char refresh_token[2048];
@@ -72,6 +77,7 @@ typedef struct MuseVitaSession {
     char vm_auth_token[2048];
     char subscribe_buffer[262144];
     char request_buffer[65536];
+    char deferred_chat_buffer[MUSEVITA_MAX_DEFERRED_CHAT_BYTES];
     uint8_t ws_message[MUSEVITA_MAX_WS_MESSAGE_BYTES];
     uint8_t assembly_buffer[MUSEVITA_MAX_ASSEMBLY_BYTES];
     uint8_t frame_buffer[MUSEVITA_MAX_FRAME_BYTES];

@@ -37,6 +37,7 @@ typedef struct ResponseBuffer {
 static void make_identity(MuseVitaSession *session, const char *json, size_t json_size);
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
 static int delete_file(const char *path);
+static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size);
 
 static int is_hex_digit(char value) {
     return (value >= '0' && value <= '9') ||
@@ -121,6 +122,9 @@ static void close_transport(MuseVitaSession *session) {
     session->request_failed = false;
     session->request_is_history = false;
     session->history_requested = false;
+    session->awaiting_chat_ack = false;
+    session->deferred_chat_overflow = false;
+    session->deferred_chat_size = 0;
 }
 
 static void set_transport_error(MuseVitaSession *session) {
@@ -686,9 +690,39 @@ static int wait_for_request(MuseVitaSession *session) {
     if (!session->request_done || session->request_failed ||
         session->request_status < 200 || session->request_status >= 300) {
         session->request_active = false;
+        session->awaiting_chat_ack = false;
+        session->deferred_chat_size = 0;
+        session->deferred_chat_overflow = false;
         return -1;
     }
     session->request_active = false;
+    if (session->awaiting_chat_ack) {
+        char identifier[128];
+        int has_identifier = muse_json_find_string(session->request_buffer,
+                                                   session->request_buffer_size,
+                                                   "message_id", identifier,
+                                                   sizeof(identifier)) ||
+                             muse_json_find_string(session->request_buffer,
+                                                   session->request_buffer_size,
+                                                   "reply_to_message_id", identifier,
+                                                   sizeof(identifier));
+        session->last_user_id[0] = '\0';
+        session->active_assistant_id[0] = '\0';
+        if (has_identifier) {
+            strncpy(session->last_user_id, identifier, sizeof(session->last_user_id) - 1);
+            session->last_user_id[sizeof(session->last_user_id) - 1] = '\0';
+        }
+        session->awaiting_chat_ack = false;
+        if (session->deferred_chat_overflow ||
+            consume_chat_bytes(session, (const uint8_t *)session->deferred_chat_buffer,
+                               session->deferred_chat_size) != 0) {
+            session->deferred_chat_size = 0;
+            session->deferred_chat_overflow = false;
+            return -1;
+        }
+        session->deferred_chat_size = 0;
+        session->deferred_chat_overflow = false;
+    }
     return 0;
 }
 
@@ -780,21 +814,42 @@ static MuseControlError control_message(const uint8_t *message, size_t message_s
 static void consume_chat_line(MuseVitaSession *session, const char *line, size_t line_size) {
     char event[64];
     char identifier[128];
+    char parent_identifier[128];
     char text[1024];
     int has_identifier = muse_json_find_string(line, line_size, "message_id",
                                                 identifier, sizeof(identifier)) ||
                          muse_json_find_string(line, line_size, "id",
                                                 identifier, sizeof(identifier));
+    int has_parent = muse_json_find_string(line, line_size, "reply_to_message_id",
+                                           parent_identifier, sizeof(parent_identifier)) ||
+                     muse_json_find_string(line, line_size, "parent_message_id",
+                                           parent_identifier, sizeof(parent_identifier));
+    if (session->awaiting_chat_ack) {
+        if (line_size + 1 > sizeof(session->deferred_chat_buffer) - session->deferred_chat_size) {
+            session->deferred_chat_overflow = true;
+            return;
+        }
+        memcpy(session->deferred_chat_buffer + session->deferred_chat_size, line, line_size);
+        session->deferred_chat_size += line_size;
+        session->deferred_chat_buffer[session->deferred_chat_size++] = '\n';
+        return;
+    }
     if (!muse_json_find_string(line, line_size, "event", event, sizeof(event))) return;
+    if (has_parent && session->last_user_id[0] != '\0' &&
+        strcmp(parent_identifier, session->last_user_id) != 0 &&
+        strcmp(parent_identifier, session->active_assistant_id) != 0) return;
     if (strcmp(event, "message.user") == 0) {
-        if (has_identifier && strcmp(identifier, session->last_user_id) == 0) return;
+        if (has_identifier && session->last_user_id[0] != '\0' &&
+            strcmp(identifier, session->last_user_id) != 0) return;
+        if (has_identifier && strcmp(identifier, session->last_rendered_user_id) == 0) return;
         if (muse_json_find_string(line, line_size, "display_text", text, sizeof(text)) ||
             muse_json_find_string(line, line_size, "content", text, sizeof(text)) ||
             muse_json_find_string(line, line_size, "text", text, sizeof(text))) {
             muse_vita_chat_add_message(session->chat, MUSEVITA_CHAT_USER, text);
             if (has_identifier) {
-                strncpy(session->last_user_id, identifier, sizeof(session->last_user_id) - 1);
-                session->last_user_id[sizeof(session->last_user_id) - 1] = '\0';
+                strncpy(session->last_rendered_user_id, identifier,
+                        sizeof(session->last_rendered_user_id) - 1);
+                session->last_rendered_user_id[sizeof(session->last_rendered_user_id) - 1] = '\0';
             }
         }
     } else if (strcmp(event, "delta.message_start") == 0) {
@@ -1197,11 +1252,17 @@ int muse_vita_session_send_chat(MuseVitaSession *session, const char *message) {
     headers[3] = (MuseLinkHeader){"Accept", "application/json"};
     stream_id = session->next_stream_id++;
     begin_request(session, stream_id);
+    session->awaiting_chat_ack = true;
+    session->deferred_chat_size = 0;
+    session->deferred_chat_overflow = false;
+    session->last_user_id[0] = '\0';
     if (muse_link_encode_http_request(stream_id, "POST", "/chat/stream", headers, 4,
                                       (const uint8_t *)body, body_size, 1,
                                       session->frame_buffer, sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
         send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
         session->request_active = false;
+        session->awaiting_chat_ack = false;
+        session->deferred_chat_size = 0;
         return -1;
     }
     return wait_for_request(session);
@@ -1230,11 +1291,17 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
     headers[3] = (MuseLinkHeader){"Accept", "application/json"};
     stream_id = session->next_stream_id++;
     begin_request(session, stream_id);
+    session->awaiting_chat_ack = true;
+    session->deferred_chat_size = 0;
+    session->deferred_chat_overflow = false;
+    session->last_user_id[0] = '\0';
     if (muse_link_encode_http_request(stream_id, "POST", "/chat/stream", headers, 4,
                                       NULL, 0, 0, session->frame_buffer,
                                       sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
         send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
         session->request_active = false;
+        session->awaiting_chat_ack = false;
+        session->deferred_chat_size = 0;
         return -1;
     }
     for (size_t offset = 0; offset < body_size;) {
@@ -1247,6 +1314,8 @@ int muse_vita_session_send_media(MuseVitaSession *session, const char *message,
                                         sizeof(session->frame_buffer), &encoded_size) != MUSE_LINK_WIRE_OK ||
             send_link_payload(session, session->frame_buffer, encoded_size) != 0) {
             session->request_active = false;
+            session->awaiting_chat_ack = false;
+            session->deferred_chat_size = 0;
             return -1;
         }
         offset += chunk_size;

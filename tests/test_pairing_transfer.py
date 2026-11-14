@@ -44,6 +44,17 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("return status == 401 ? -2 : -1;", source)
         self.assertIn("forget_pairing(session);", source)
 
+    def test_chat_events_are_deferred_until_ack_and_bound_to_parent(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        self.assertIn("awaiting_chat_ack", source)
+        self.assertIn("deferred_chat_buffer", source)
+        self.assertIn('"reply_to_message_id"', source)
+        self.assertIn("last_rendered_user_id", source)
+
+    def test_pairing_listener_only_starts_on_setup_page(self):
+        source = (ROOT / "vita/src/main.c").read_text()
+        self.assertIn("page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE", source)
+
 
 if __name__ == "__main__":
     unittest.main()

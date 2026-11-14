@@ -383,11 +383,12 @@ int main(void) {
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)
                                            : MUSEVITA_NETWORK_UNKNOWN;
-        if (network == MUSEVITA_NETWORK_ONLINE && pairing_transfer_started && !pairing_transfer.ready) {
+        if (pairing_transfer_started &&
+            (page != PAGE_SETUP || (network == MUSEVITA_NETWORK_ONLINE && !pairing_transfer.ready))) {
             muse_vita_pairing_transfer_stop(&pairing_transfer);
             pairing_transfer_started = false;
         }
-        if (network == MUSEVITA_NETWORK_ONLINE && !pairing_transfer_started) {
+        if (page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE && !pairing_transfer_started) {
             pairing_transfer_started = muse_vita_pairing_transfer_start(&pairing_transfer) == 0;
         }
         if (network == MUSEVITA_NETWORK_ONLINE &&
