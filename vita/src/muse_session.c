@@ -966,6 +966,11 @@ static void consume_history_response(MuseVitaSession *session) {
                                                      role_end, member_end,
                                                      "display_text", text, sizeof(text),
                                                      NULL, NULL) ||
+                         ((strcmp(role, "assistant") == 0 || strcmp(role, "agent") == 0 ||
+                           strcmp(role, "muse") == 0) &&
+                          muse_json_find_assistant_text(session->request_buffer + role_end,
+                                                        member_end - role_end,
+                                                        text, sizeof(text))) ||
                          muse_json_find_string_range(session->request_buffer,
                                                      session->request_buffer_size,
                                                      role_end, member_end,
