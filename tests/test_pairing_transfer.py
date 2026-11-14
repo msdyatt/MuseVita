@@ -22,6 +22,8 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("HKDF", page)
         self.assertIn("AES-GCM", page)
         self.assertIn("cfg.pub!==pinned", page)
+        self.assertIn("'='.repeat((4-raw.length%4)%4)", page)
+        self.assertNotIn("pinned.replaceAll('-','+').replaceAll('_','/')+'=='", page)
         self.assertIn("/pair/upload", page)
         self.assertNotIn("access_token", page)
         self.assertNotIn("refresh_token", page)

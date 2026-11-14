@@ -24,7 +24,7 @@ async function go(){try{
  if(!sid||!pinned)throw Error('Invalid or incomplete QR link.');
  const names=new Set(chosen.map(f=>f.name));if(!names.has('identity.json')||!names.has('pairing.json')||!names.has('sdk_token'))throw Error('Select all three official pairing files.');
  const cfg=await (await fetch('/pair/config?s='+encodeURIComponent(sid))).json();if(cfg.sid!==sid||cfg.pub!==pinned)throw Error('Vita key does not match this QR.');
- const raw=pinned.replaceAll('-','+').replaceAll('_','/')+'==';const vitaBytes=Uint8Array.from(atob(raw),c=>c.charCodeAt(0));
+ const raw=pinned.replaceAll('-','+').replaceAll('_','/');const vitaBytes=Uint8Array.from(atob(raw+'='.repeat((4-raw.length%4)%4)),c=>c.charCodeAt(0));
  const vita=await crypto.subtle.importKey('raw',vitaBytes,{name:'ECDH',namedCurve:'P-256'},false,[]);
  const eph=await crypto.subtle.generateKey({name:'ECDH',namedCurve:'P-256'},true,['deriveBits']);
  const bits=await crypto.subtle.deriveBits({name:'ECDH',public:vita},eph.privateKey,256);
