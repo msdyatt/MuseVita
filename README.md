@@ -119,7 +119,8 @@ commit, currently reviewed at `f2c702b123e97f4fecdaefb29ded17bb03fab0b0`:
 The implementation must be fixture-tested before any real credential is used.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
 [docs/SECURITY.md](docs/SECURITY.md) for the security boundary and pending
-work. No Meta or Sony affiliation is claimed.
+work. See [docs/PAIRING.md](docs/PAIRING.md) for the one-time supported
+pairing workflow. No Meta or Sony affiliation is claimed.
 
 ## Publishing
 
