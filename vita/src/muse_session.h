@@ -74,6 +74,7 @@ typedef struct MuseVitaSession {
     char mac[32];
     char node_id[64];
     char device_id[96];
+    char api_root[256];
     char vm_id[256];
     char noise_host[256];
     char vm_auth_token[2048];

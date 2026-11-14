@@ -18,7 +18,7 @@
 #define SDK_TOKEN_PATH "ux0:data/MuseVita/sdk_token"
 #define CREDENTIALS_PATH "ux0:data/MuseVita/credentials.bin"
 #define IDENTITY_PATH "ux0:data/MuseVita/identity.json"
-#define API_URL "https://api.muse.ai/fetch_vms"
+#define DEFAULT_API_ROOT "https://api.muse.ai"
 #define USER_AGENT "MuseVita/0.1.0 (PlayStation Vita)"
 #define HANDSHAKE_TIMEOUT_US (20u * 1000u * 1000u)
 #define PING_INTERVAL_US (20u * 1000u * 1000u)
@@ -38,6 +38,27 @@ static void make_identity(MuseVitaSession *session, const char *json, size_t jso
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
 static int delete_file(const char *path);
 static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size);
+
+static void set_api_root(MuseVitaSession *session, const char *candidate) {
+    size_t length;
+    if (session == NULL || candidate == NULL || strncmp(candidate, "https://", 8) != 0) return;
+    length = strlen(candidate);
+    while (length > 8 && candidate[length - 1] == '/') length--;
+    if (length <= 8 || length >= sizeof(session->api_root)) return;
+    for (size_t i = 0; i < length; i++) {
+        unsigned char value = (unsigned char)candidate[i];
+        if (value < 0x21 || value == '"' || value == '#' || value == '?') return;
+    }
+    memcpy(session->api_root, candidate, length);
+    session->api_root[length] = '\0';
+}
+
+static void load_api_root_from_json(MuseVitaSession *session, const char *json, size_t json_size) {
+    char candidate[sizeof(session->api_root)];
+    if (session == NULL || json == NULL ||
+        !muse_json_find_string(json, json_size, "api_url_v2", candidate, sizeof(candidate))) return;
+    set_api_root(session, candidate);
+}
 
 static int is_hex_digit(char value) {
     return (value >= '0' && value <= '9') ||
@@ -236,12 +257,13 @@ static int save_encrypted_credentials(const MuseVitaSession *session) {
     int plaintext_size;
     if (session->sdk_token[0] != '\0') {
         plaintext_size = snprintf(plaintext, sizeof(plaintext),
-                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"sdk_token\":\"%s\"}",
-                                  session->access_token, session->refresh_token, session->sdk_token);
+                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"sdk_token\":\"%s\",\"api_root\":\"%s\"}",
+                                  session->access_token, session->refresh_token, session->sdk_token,
+                                  session->api_root);
     } else {
         plaintext_size = snprintf(plaintext, sizeof(plaintext),
-                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\"}",
-                                  session->access_token, session->refresh_token);
+                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"api_root\":\"%s\"}",
+                                  session->access_token, session->refresh_token, session->api_root);
     }
     if (plaintext_size < 0 || (size_t)plaintext_size >= sizeof(plaintext)) return -1;
     for (unsigned i = 0; i < sizeof(nonce); i++) {
@@ -300,6 +322,13 @@ static int load_encrypted_credentials(MuseVitaSession *session) {
                                session->refresh_token, sizeof(session->refresh_token))) return -1;
     (void)muse_json_find_string((const char *)plaintext, plaintext_size, "sdk_token",
                                 session->sdk_token, sizeof(session->sdk_token));
+    {
+        char api_root[sizeof(session->api_root)];
+        if (muse_json_find_string((const char *)plaintext, plaintext_size, "api_root",
+                                  api_root, sizeof(api_root))) {
+            set_api_root(session, api_root);
+        }
+    }
     return 0;
 }
 
@@ -372,6 +401,7 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
         session->state = MUSEVITA_SESSION_NO_PAIRING;
         return -1;
     }
+    load_api_root_from_json(session, pairing, pairing_size);
     if (!muse_json_find_string(pairing, pairing_size, "access_token",
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string(pairing, pairing_size, "refresh_token",
@@ -405,6 +435,7 @@ int muse_vita_session_import_pairing(MuseVitaSession *session, const char *ident
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string(pairing_json, pairing_size, "refresh_token",
                                session->refresh_token, sizeof(session->refresh_token))) return -1;
+    load_api_root_from_json(session, pairing_json, pairing_size);
     if (write_file(IDENTITY_PATH, identity_json, identity_size) != 0) return -1;
     make_identity(session, identity_json, identity_size);
     strcpy(session->sdk_token, sdk_token);
@@ -421,6 +452,7 @@ static int fetch_vm(MuseVitaSession *session) {
     char vm_id[sizeof(session->vm_id)];
     char vm_name[sizeof(session->vm_id)];
     char vm_auth_token[sizeof(session->vm_auth_token)];
+    char api_url[sizeof(session->api_root) + 16];
     ResponseBuffer response = {response_data, 0, sizeof(response_data) - 1};
     long status = 0;
     CURLcode result;
@@ -428,13 +460,17 @@ static int fetch_vm(MuseVitaSession *session) {
     size_t vm_object_end = 0;
     int has_vm_object;
     if (curl == NULL) return -1;
+    if (snprintf(api_url, sizeof(api_url), "%s/fetch_vms", session->api_root) >= (int)sizeof(api_url)) {
+        curl_easy_cleanup(curl);
+        return -1;
+    }
     headers = curl_slist_append(headers, "X-API-Version: 1.0.0");
     {
         char authorization[2304];
         snprintf(authorization, sizeof(authorization), "Authorization: Bearer %s", session->access_token);
         headers = curl_slist_append(headers, authorization);
     }
-    curl_easy_setopt(curl, CURLOPT_URL, API_URL);
+    curl_easy_setopt(curl, CURLOPT_URL, api_url);
     curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
     curl_easy_setopt(curl, CURLOPT_USERAGENT, USER_AGENT);
@@ -519,11 +555,16 @@ static int refresh_credentials(MuseVitaSession *session) {
     char request_body[512];
     char raw_refresh[2048];
     char authorization[2304];
+    char api_url[sizeof(session->api_root) + 32];
     ResponseBuffer response = {response_data, 0, sizeof(response_data) - 1};
     long status = 0;
     CURLcode result;
     const char *colon;
     if (curl == NULL) return -1;
+    if (snprintf(api_url, sizeof(api_url), "%s/device_token/refresh", session->api_root) >= (int)sizeof(api_url)) {
+        curl_easy_cleanup(curl);
+        return -1;
+    }
     colon = strrchr(session->refresh_token, ':');
     colon = colon == NULL ? session->refresh_token : colon + 1;
     strncpy(raw_refresh, colon, sizeof(raw_refresh) - 1);
@@ -538,7 +579,7 @@ static int refresh_credentials(MuseVitaSession *session) {
     snprintf(authorization, sizeof(authorization), "Authorization: Bearer hatch_refresh:%s", raw_refresh);
     headers = curl_slist_append(headers, authorization);
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    curl_easy_setopt(curl, CURLOPT_URL, "https://api.muse.ai/device_token/refresh");
+    curl_easy_setopt(curl, CURLOPT_URL, api_url);
     curl_easy_setopt(curl, CURLOPT_POST, 1L);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_body);
     curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(request_body));
@@ -1196,6 +1237,7 @@ static int process_websocket_message(MuseVitaSession *session, const uint8_t *me
 int muse_vita_session_init(MuseVitaSession *session) {
     if (session == NULL) return -1;
     memset(session, 0, sizeof(*session));
+    strcpy(session->api_root, DEFAULT_API_ROOT);
     session->state = MUSEVITA_SESSION_NO_PAIRING;
     session->next_stream_id = 1;
     session->next_chunk_id = 1;

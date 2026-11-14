@@ -49,6 +49,8 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('"vm_name"', source)
         self.assertIn("strncpy(vm_id, vm_name", source)
         self.assertIn("muse_json_find_array_object_range", source)
+        self.assertIn('"api_url_v2"', source)
+        self.assertIn("DEFAULT_API_ROOT", source)
 
     def test_chat_events_are_deferred_until_ack_and_bound_to_parent(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
