@@ -260,9 +260,11 @@ static int handle_request(MuseVitaPairingTransfer *transfer, int socket) {
 }
 
 static int transfer_thread(unsigned int args, void *arg) {
-    MuseVitaPairingTransfer *transfer = arg;
+    MuseVitaPairingTransfer *transfer;
     SceNetSockaddrIn address;
-    (void)args;
+    if (arg == NULL || args != sizeof(transfer)) return -1;
+    transfer = *(MuseVitaPairingTransfer **)arg;
+    if (transfer == NULL) return -1;
     transfer->listen_socket = sceNetSocket("MuseVitaPair", SCE_NET_AF_INET, SCE_NET_SOCK_STREAM, 0);
     if (transfer->listen_socket < 0) {
         transfer->ready = false;
@@ -350,7 +352,8 @@ int muse_vita_pairing_transfer_start(MuseVitaPairingTransfer *transfer) {
              transfer->session_id, transfer->public_key_b64);
     transfer->thread = sceKernelCreateThread("MuseVitaPairing", transfer_thread,
                                              0x10000100, 0x10000, 0, 0, NULL);
-    if (transfer->thread < 0 || sceKernelStartThread(transfer->thread, 0, NULL) < 0) {
+    if (transfer->thread < 0 ||
+        sceKernelStartThread(transfer->thread, sizeof(transfer), &transfer) < 0) {
         if (transfer->thread >= 0) {
             sceKernelDeleteThread(transfer->thread);
             transfer->thread = -1;
