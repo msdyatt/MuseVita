@@ -237,7 +237,8 @@ static int dh(MuseNoiseXX *noise, const mbedtls_mpi *private_key,
     result = mbedtls_ecp_point_read_binary(&noise->group, &point,
                                            peer_public, MUSE_NOISE_KEY_BYTES);
     if (result == 0) result = mbedtls_ecdh_compute_shared(&noise->group, &shared, &point,
-                                                           private_key, NULL, NULL);
+                                                           private_key, mbedtls_ctr_drbg_random,
+                                                           &noise->drbg);
     if (result == 0) result = mbedtls_mpi_write_binary_le(&shared, output, MUSE_NOISE_KEY_BYTES);
     mbedtls_mpi_free(&shared);
     mbedtls_ecp_point_free(&point);
@@ -308,6 +309,7 @@ MuseNoiseError muse_noise_xx_write_message1(MuseNoiseXX *noise, uint8_t output[3
 MuseNoiseError muse_noise_xx_read_message2(MuseNoiseXX *noise, const uint8_t *message, size_t message_size) {
     uint8_t shared[32];
     uint8_t clear[32];
+    uint8_t payload_clear[512];
     size_t clear_size = 0;
     if (noise == NULL || message == NULL || noise->phase != NOISE_PHASE_MESSAGE1_SENT) {
         return MUSE_NOISE_INVALID_STATE;
@@ -322,9 +324,9 @@ MuseNoiseError muse_noise_xx_read_message2(MuseNoiseXX *noise, const uint8_t *me
     memcpy(noise->remote_static, clear, 32);
     if (dh(noise, &noise->ephemeral_private, noise->remote_static, shared) != 0 ||
         mix_key(noise, shared) != 0 ||
-        decrypt_and_hash(noise, message + 80, message_size - 80, clear, sizeof(clear), &clear_size) != 0) {
-        return MUSE_NOISE_CRYPTO;
-    }
+        message_size - 80 > sizeof(payload_clear) ||
+        decrypt_and_hash(noise, message + 80, message_size - 80, payload_clear,
+                         sizeof(payload_clear), &clear_size) != 0) return MUSE_NOISE_CRYPTO;
     noise->phase = NOISE_PHASE_MESSAGE2_READ;
     return MUSE_NOISE_OK;
 }
