@@ -56,6 +56,7 @@ static bool ime_open;
 static bool app_util_ready;
 static char media_status[96];
 static char setup_status[96];
+static char chat_status[96];
 static uint8_t qr_temp[qrcodegen_BUFFER_LEN_FOR_VERSION(20)];
 static uint8_t qr_code[qrcodegen_BUFFER_LEN_FOR_VERSION(20)];
 static const SceWChar16 chat_ime_title[] = {
@@ -216,7 +217,8 @@ static void draw_chat_page(vita2d_pgf *font, const MuseVitaChatState *chat) {
     } else {
         text(font, 70, 452, 18, MUTED, "X  Type a message");
     }
-    if (media_status[0] != '\0') text(font, 70, 480, 17, MUTED, media_status);
+    if (chat_status[0] != '\0') text(font, 70, 480, 17, WARNING, chat_status);
+    else if (media_status[0] != '\0') text(font, 70, 480, 17, MUTED, media_status);
 }
 
 static void draw(vita2d_pgf *font, int page, MuseVitaNetworkState network,
@@ -366,6 +368,7 @@ int main(void) {
     muse_vita_chat_init(&chat);
     media_status[0] = '\0';
     setup_status[0] = '\0';
+    chat_status[0] = '\0';
     static MuseVitaPairingTransfer pairing_transfer;
     memset(&pairing_transfer, 0, sizeof(pairing_transfer));
     pairing_transfer.listen_socket = -1;
@@ -405,9 +408,13 @@ int main(void) {
                 strcpy(setup_status, "No received or local pairing bundle found.");
             }
         }
-        if ((just_pressed & SCE_CTRL_SQUARE) && page == PAGE_CHAT && chat.draft_ready &&
-            muse_vita_session_send_chat(&muse_session, chat.draft) == 0) {
-            muse_vita_chat_clear_draft(&chat);
+        if ((just_pressed & SCE_CTRL_SQUARE) && page == PAGE_CHAT && chat.draft_ready) {
+            if (muse_vita_session_send_chat(&muse_session, chat.draft) == 0) {
+                muse_vita_chat_clear_draft(&chat);
+                strcpy(chat_status, "Message sent.");
+            } else {
+                strcpy(chat_status, "Message not sent — check the connection.");
+            }
         }
         MuseVitaNetworkState network = network_ready
                                            ? network_provider.probe(network_provider.context)

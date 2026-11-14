@@ -69,6 +69,12 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('"reply_to_message_id"', source)
         self.assertIn("last_rendered_user_id", source)
 
+    def test_chat_send_reports_failure_without_discarding_the_draft(self):
+        source = (ROOT / "vita/src/main.c").read_text()
+        self.assertIn('"Message sent."', source)
+        self.assertIn('"Message not sent — check the connection."', source)
+        self.assertIn("muse_vita_chat_clear_draft(&chat);", source)
+
     def test_websocket_transport_reassembles_fragments_and_handles_partial_writes(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
         self.assertIn("CURLWS_CONT", source)

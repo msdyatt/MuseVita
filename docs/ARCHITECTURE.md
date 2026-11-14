@@ -23,7 +23,9 @@
 - `platform/vita_http`: libcurl TLS/WebSocket client, certificate verification,
   VM lookup, refresh, and network transport (`vita/src/muse_session.c`)
 - `protocol/noise_xx`: the initiator state machine is implemented with VitaSDK
-  mbedTLS and low-order-point rejection; cross-runtime fixture verification remains
+  mbedTLS and low-order-point rejection; cross-runtime fixture verification
+  passes against the pinned official SDK, while a real WSS peer remains
+  unverified
 - `protocol/link`: shared stream framing, register/invoke/result, HTTP-over-link
   request encoding, and response decoding are implemented
 - `protocol/chat`: bounded initial history request, chat send, NDJSON

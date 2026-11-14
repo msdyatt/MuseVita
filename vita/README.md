@@ -45,15 +45,17 @@ Once prerequisites are installed, look for `build-vita/MuseVita.vpk`. Transfer i
   physical Vita testing with an authenticated Muse account. Transport
   reconnect retries after a bounded delay when the imported credentials remain
   valid.
-- Cross-runtime Noise fixture tests and validation against a real user-owned
-  Muse account on a physical Vita are still required.
+- Cross-runtime Noise fixture tests now pass against the pinned official SDK;
+  validation against a real user-owned Muse account on a physical Vita is
+  still required. The real WSS endpoint remains unverified here.
 
 The portable `protocol/control_framing.*` module is shared-code groundwork for
 MuseVita and the planned MuseDS client. It implements the official SDK's
 little-endian length-prefixed control-message framing and is host-tested. The
 portable `protocol/noise_xx.*` module implements the official Noise XX
-initiator with VitaSDK mbedTLS and is included in the VPK build; it still needs
-fixture interoperability tests and a real WSS peer. Credential import and
-encrypted local storage live in `src/muse_session.c`.
+initiator with VitaSDK mbedTLS and is included in the VPK build. The shared
+`protocol/noise_framing.*` module reassembles bounded, interleaved transport
+chunks and is host-tested. Credential import and encrypted local storage live
+in `src/muse_session.c`.
 
 The network/crypto implementation must be tested against Meta's SDK test fixtures before credentials are ever used on the handheld.
