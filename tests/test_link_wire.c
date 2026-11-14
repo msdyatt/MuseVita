@@ -62,6 +62,18 @@ int main(void) {
         assert(proto_size > 20);
     }
     {
+        uint8_t open_chunk[128];
+        uint8_t end_chunk[128];
+        size_t open_size = 0;
+        size_t end_size = 0;
+        assert(muse_link_encode_body_chunk(7, (const uint8_t *)"x", 1, 0,
+                                           open_chunk, sizeof(open_chunk), &open_size) == MUSE_LINK_WIRE_OK);
+        assert(muse_link_encode_body_chunk(7, (const uint8_t *)"x", 1, 1,
+                                           end_chunk, sizeof(end_chunk), &end_size) == MUSE_LINK_WIRE_OK);
+        assert(open_size + 2 == end_size);
+        assert(memcmp(open_chunk, end_chunk, open_size) != 0);
+    }
+    {
         uint8_t large_body[60000];
         uint8_t large_output[70000];
         memset(large_body, 'x', sizeof(large_body));

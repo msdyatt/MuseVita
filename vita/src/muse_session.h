@@ -36,6 +36,7 @@ typedef struct MuseVitaSession {
     bool registered;
     bool subscribed;
     bool ws_message_active;
+    bool ws_text_active;
     bool unpaired;
     int64_t control_stream_id;
     int64_t subscribe_stream_id;

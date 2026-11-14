@@ -78,6 +78,7 @@ static void close_transport(MuseVitaSession *session) {
     session->registered = false;
     session->subscribed = false;
     session->ws_message_active = false;
+    session->ws_text_active = false;
     session->ws_message_size = 0;
     session->assembly_size = 0;
     session->assembly_count = 0;
@@ -502,9 +503,17 @@ static int websocket_receive(MuseVitaSession *session, int blocking, size_t *mes
             continue;
         }
         if (result != CURLE_OK) return -1;
-        session->ws_message_size += received;
         if (meta != NULL && (meta->flags & CURLWS_CLOSE) != 0) return -1;
-        if (meta != NULL && (meta->flags & CURLWS_TEXT) != 0) return -1;
+        if (session->ws_text_active) {
+            if (meta == NULL || meta->bytesleft == 0) session->ws_text_active = false;
+            continue;
+        }
+        if (meta != NULL && (meta->flags & CURLWS_TEXT) != 0) {
+            session->ws_message_size = 0;
+            session->ws_text_active = meta->bytesleft != 0;
+            continue;
+        }
+        session->ws_message_size += received;
         if (meta != NULL && (meta->flags & (CURLWS_PING | CURLWS_PONG)) != 0) {
             session->ws_message_size = 0;
             if (meta->bytesleft == 0) continue;
@@ -545,7 +554,9 @@ static int send_control_json(MuseVitaSession *session, const char *message, size
     size_t framed_size = 0;
     if (muse_control_encode((const uint8_t *)message, message_size,
                             framed, sizeof(framed), &framed_size) != MUSE_CONTROL_OK) return -1;
-    if (muse_link_encode_body_chunk(session->control_stream_id, framed, framed_size, 1,
+    /* /link-control is a long-lived request. Each length-prefixed JSON
+       message is a body chunk, not the end of the HTTP request. */
+    if (muse_link_encode_body_chunk(session->control_stream_id, framed, framed_size, 0,
                                     session->frame_buffer, sizeof(session->frame_buffer), &framed_size) != MUSE_LINK_WIRE_OK) return -1;
     return send_link_payload(session, session->frame_buffer, framed_size);
 }
@@ -789,7 +800,14 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
     MuseLinkIncoming incoming;
     if (muse_link_decode_service_response(payload, payload_size, &incoming) != MUSE_LINK_WIRE_OK) return -1;
     if (incoming.kind == MUSE_LINK_INCOMING_RESPONSE) {
-        if (incoming.stream_id == session->subscribe_stream_id && incoming.status >= 200 && incoming.status < 300) {
+        if (incoming.stream_id == session->control_stream_id &&
+            (incoming.status < 200 || incoming.status >= 300)) {
+            return -1;
+        } else if (incoming.stream_id == session->control_stream_id && incoming.end_body) {
+            return -1;
+        } else if (incoming.stream_id == session->subscribe_stream_id && incoming.end_body) {
+            return -1;
+        } else if (incoming.stream_id == session->subscribe_stream_id && incoming.status >= 200 && incoming.status < 300) {
             session->subscribed = true;
         } else if (incoming.stream_id == session->subscribe_stream_id && incoming.status >= 300) {
             return -1;
@@ -817,6 +835,10 @@ static int process_service_response(MuseVitaSession *session, const uint8_t *pay
     }
     if (incoming.kind == MUSE_LINK_INCOMING_RESET && incoming.stream_id == session->request_stream_id &&
         session->request_active) finish_request(session, 1);
+    if (incoming.kind == MUSE_LINK_INCOMING_RESET &&
+        (incoming.stream_id == session->control_stream_id || incoming.stream_id == session->subscribe_stream_id)) return -1;
+    if (incoming.kind == MUSE_LINK_INCOMING_BODY_CHUNK && incoming.end_body &&
+        (incoming.stream_id == session->control_stream_id || incoming.stream_id == session->subscribe_stream_id)) return -1;
     return 0;
 }
 
