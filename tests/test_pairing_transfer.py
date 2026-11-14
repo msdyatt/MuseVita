@@ -62,6 +62,15 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("current_time - session->access_token_saved_at", source)
         self.assertIn("session->access_token_saved_at = now_seconds();", source)
 
+    def test_native_import_rechecks_sdk_token_hint(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        self.assertIn("sdk_token_matches_pairing_hint", source)
+        import_start = source.index("int muse_vita_session_import_pairing")
+        import_end = source.index("static int fetch_vm", import_start)
+        import_block = source[import_start:import_end]
+        self.assertIn("sdk_token_matches_pairing_hint(pairing_json, pairing_size, sdk_token)",
+                      import_block)
+
     def test_vm_lookup_accepts_official_vm_name_fallback(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
         self.assertIn('"vm_name"', source)
