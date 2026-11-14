@@ -39,6 +39,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
 | HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
 | WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
+| Muse device discovery and unpair handling | Implemented: structured `device.guide`, capability metadata, and local credential retirement on `link.unpaired`/`node.unpaired`; live validation pending |
 | Native chat view, bounded history, and Vita IME composer | Implemented and connected to streamed transport events |
 | Direct chat send/subscribe and streamed replies | Implemented in the native source; account/hardware validation pending |
 | Native photo and voice-note capture | Implemented as bounded Vita camera/JPEG and microphone/WAV send paths; physical capture validation pending |
