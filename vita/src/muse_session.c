@@ -23,6 +23,7 @@
 #define HANDSHAKE_TIMEOUT_US (20u * 1000u * 1000u)
 #define PING_INTERVAL_US (20u * 1000u * 1000u)
 #define RETRY_DELAY_US (10u * 1000u * 1000u)
+#define TOKEN_REFRESH_AGE_SECONDS (3u * 60u * 60u)
 #define MAX_HTTP_JSON_BYTES (64u * 1024u)
 #define MAX_CONTROL_OUTBOUND_MESSAGE_BYTES (256u * 1024u)
 #define CREDENTIAL_MAGIC "MVC1"
@@ -38,6 +39,10 @@ static void make_identity(MuseVitaSession *session, const char *json, size_t jso
 static int read_file(const char *path, char *output, size_t capacity, size_t *output_size);
 static int delete_file(const char *path);
 static int consume_chat_bytes(MuseVitaSession *session, const uint8_t *bytes, size_t size);
+
+static uint64_t now_seconds(void) {
+    return (uint64_t)sceKernelGetSystemTimeWide() / 1000000u;
+}
 
 static int chat_event_is_main_session(const char *line, size_t line_size) {
     char session_id[64];
@@ -274,13 +279,15 @@ static int save_encrypted_credentials(const MuseVitaSession *session) {
     int plaintext_size;
     if (session->sdk_token[0] != '\0') {
         plaintext_size = snprintf(plaintext, sizeof(plaintext),
-                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"sdk_token\":\"%s\",\"api_root\":\"%s\"}",
-                                  session->access_token, session->refresh_token, session->sdk_token,
-                                  session->api_root);
+                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"access_token_saved_at\":%llu,\"sdk_token\":\"%s\",\"api_root\":\"%s\"}",
+                                  session->access_token, session->refresh_token,
+                                  (unsigned long long)session->access_token_saved_at,
+                                  session->sdk_token, session->api_root);
     } else {
         plaintext_size = snprintf(plaintext, sizeof(plaintext),
-                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"api_root\":\"%s\"}",
-                                  session->access_token, session->refresh_token, session->api_root);
+                                  "{\"access_token\":\"%s\",\"refresh_token\":\"%s\",\"access_token_saved_at\":%llu,\"api_root\":\"%s\"}",
+                                  session->access_token, session->refresh_token,
+                                  (unsigned long long)session->access_token_saved_at, session->api_root);
     }
     if (plaintext_size < 0 || (size_t)plaintext_size >= sizeof(plaintext)) return -1;
     for (unsigned i = 0; i < sizeof(nonce); i++) {
@@ -337,6 +344,13 @@ static int load_encrypted_credentials(MuseVitaSession *session) {
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string((const char *)plaintext, plaintext_size, "refresh_token",
                                session->refresh_token, sizeof(session->refresh_token))) return -1;
+    {
+        int64_t saved_at = 0;
+        session->access_token_saved_at =
+            muse_json_find_int64((const char *)plaintext, plaintext_size,
+                                 "access_token_saved_at", &saved_at) && saved_at > 0
+                ? (uint64_t)saved_at : now_seconds();
+    }
     (void)muse_json_find_string((const char *)plaintext, plaintext_size, "sdk_token",
                                 session->sdk_token, sizeof(session->sdk_token));
     {
@@ -426,6 +440,12 @@ int muse_vita_session_load_pairing(MuseVitaSession *session) {
         session->state = MUSEVITA_SESSION_NO_PAIRING;
         return -1;
     }
+    {
+        int64_t saved_at = 0;
+        session->access_token_saved_at =
+            muse_json_find_int64(pairing, pairing_size, "access_token_saved_at", &saved_at) && saved_at > 0
+                ? (uint64_t)saved_at : now_seconds();
+    }
     (void)muse_json_find_string(pairing, pairing_size, "sdk_token",
                                 session->sdk_token, sizeof(session->sdk_token));
     if (session->sdk_token[0] == '\0') (void)load_sdk_token_file(session);
@@ -452,6 +472,12 @@ int muse_vita_session_import_pairing(MuseVitaSession *session, const char *ident
                                session->access_token, sizeof(session->access_token)) ||
         !muse_json_find_string(pairing_json, pairing_size, "refresh_token",
                                session->refresh_token, sizeof(session->refresh_token))) return -1;
+    {
+        int64_t saved_at = 0;
+        session->access_token_saved_at =
+            muse_json_find_int64(pairing_json, pairing_size, "access_token_saved_at", &saved_at) && saved_at > 0
+                ? (uint64_t)saved_at : now_seconds();
+    }
     load_api_root_from_json(session, pairing_json, pairing_size);
     if (write_file(IDENTITY_PATH, identity_json, identity_size) != 0) return -1;
     make_identity(session, identity_json, identity_size);
@@ -618,6 +644,7 @@ static int refresh_credentials(MuseVitaSession *session) {
                                session->refresh_token, sizeof(session->refresh_token))) {
         return status == 401 ? -2 : -1;
     }
+    session->access_token_saved_at = now_seconds();
     (void)delete_file(PAIRING_PATH);
     return save_encrypted_credentials(session);
 }
@@ -1316,6 +1343,18 @@ int muse_vita_session_connect(MuseVitaSession *session, MuseVitaChatState *chat)
     session->history_requested = chat->message_count != 0;
     session->state = MUSEVITA_SESSION_CONNECTING;
     {
+        uint64_t current_time = now_seconds();
+        if (session->access_token_saved_at == 0 ||
+            (current_time > session->access_token_saved_at &&
+             current_time - session->access_token_saved_at >= TOKEN_REFRESH_AGE_SECONDS)) {
+            int refresh_result = refresh_credentials(session);
+            if (refresh_result == -2) {
+                forget_pairing(session);
+                return -1;
+            }
+            /* A transient refresh failure is not fatal: fetch_vms can still
+               succeed with the current access token, matching the SDK. */
+        }
         int fetch_result = fetch_vm(session);
         if (fetch_result == -2) {
             int refresh_result = refresh_credentials(session);

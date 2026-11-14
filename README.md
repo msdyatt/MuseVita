@@ -63,12 +63,15 @@ step itself; the one-time BLE pairing must be completed by a supported host
 using the same identity before these files are moved to the Vita.
 
 When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
-with a phone on the same network, choose the three official files, and press
-SELECT on the Vita. The QR contains only a local URL, an expiring session
+with a phone on the same network. The page downloads the Vita's non-secret
+identity automatically, so the phone needs only one validated
+`musevita-pairing.json` bundle from the official SDK; press SELECT on the Vita
+when it is ready. The QR contains only a local URL, an expiring session
 reference, and the Vita's ephemeral P-256 public key. The phone encrypts the
 bundle with browser WebCrypto when available, or the bundled pure-JavaScript
 fallback, using ECDH/HKDF-SHA-256/AES-256-GCM; the Vita decrypts and validates
-it locally, then immediately converts it to encrypted app storage.
+it locally, then immediately converts it to encrypted app storage. The local
+URL never serves the pairing credentials or SDK token.
 The local transfer server stops accepting uploads after the first successful
 bundle. This path is source-tested and cross-compiled, but still needs a
 physical phone/Vita transfer test before release claims.

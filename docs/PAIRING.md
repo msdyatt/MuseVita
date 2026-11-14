@@ -18,22 +18,25 @@ permanent bridge.
 4. Stop the helper's gadget service after the app reports the device paired.
    Only one live registration should use this identity.
 
-## Stage the files for VitaShell
+## Stage a bundle for phone transfer or VitaShell
 
 From the paired host, run this repository's validator. It does not contact
 Muse or print credential values; it validates the identity, device tokens,
-SDK-token format, and token hint before copying exactly three files:
+SDK-token format, and token hint before creating one phone-transfer bundle:
 
 ```sh
 python3 tools/prepare_musevita_pairing.py \
   --state-dir /var/lib/musegadget \
-  --output ./musevita-pairing
+  --output ./musevita-pairing.json
 ```
 
-Copy `identity.json`, `pairing.json`, and `sdk_token` from that new directory
-to `ux0:data/MuseVita/` with VitaShell. On first launch, MuseVita encrypts the
-credentials locally into `credentials.bin` and removes the plaintext import
-files. From then on, the Vita connects directly to Muse over Wi-Fi.
+Scan the QR code on the Vita, choose `musevita-pairing.json` on the phone, and
+press SELECT. The QR page downloads the Vita's non-secret `identity.json`
+automatically. The phone encrypts the pairing JSON and SDK token locally before
+uploading; the Vita converts them into `credentials.bin` and never serves them
+back through the local URL. If you prefer VitaShell, omit `.json` from the
+output path to keep the legacy directory containing `identity.json`,
+`pairing.json`, and `sdk_token`.
 
 The helper is intentionally required only for initial provisioning or a
 re-pair. The normal MuseVita runtime does not depend on Linux, macOS, or a
@@ -41,10 +44,11 @@ relay process.
 
 ## Optional phone transfer
 
-After the official host has produced the three files, the Vita can transfer
-them without navigating VitaShell. Connect the Vita and phone to the same
-Wi-Fi, open the MuseVita SETUP page, scan the QR code, select `identity.json`,
-`pairing.json`, and `sdk_token` on the phone, then press SELECT on the Vita.
+After the official host has produced the bundle, the Vita can transfer it
+without navigating VitaShell. Connect the Vita and phone to the same Wi-Fi,
+open the MuseVita SETUP page, and scan the QR code. The phone downloads the
+Vita identity from that pinned local session; choose only
+`musevita-pairing.json`, then press SELECT on the Vita.
 The phone page uses browser WebCrypto when available, with a bundled
 pure-JavaScript fallback for local HTTP browsers, using
 ECDH/HKDF-SHA-256/AES-256-GCM against the ephemeral public key pinned in the QR

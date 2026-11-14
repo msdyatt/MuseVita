@@ -3,7 +3,8 @@
 
 This tool never contacts Muse, prints credentials, or performs pairing. Run it
 on the BLE-capable host *after* the official SDK has paired the seeded Vita
-identity. It validates and copies only the three files MuseVita imports.
+identity. It validates the official state and can create either the three-file
+VitaShell bundle or one `musevita-pairing.json` phone-transfer input file.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from pathlib import Path
 MAC_RE = re.compile(r"[0-9a-f]{2}(?::[0-9a-f]{2}){5}\Z")
 SDK_TOKEN_RE = re.compile(r"mgst_[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]\Z")
 FILES = ("identity.json", "pairing.json", "sdk_token")
+BUNDLE_FORMAT = "musevita-pairing-v1"
 
 
 class PairingBundleError(Exception):
@@ -79,21 +81,56 @@ def stage_bundle(state_dir: Path, output_dir: Path) -> None:
         raise PairingBundleError("could not stage the pairing bundle") from exc
 
 
+def stage_bundle_file(state_dir: Path, output_file: Path) -> None:
+    """Create one JSON file suitable for the phone-assisted QR transfer."""
+    validate_state(state_dir)
+    if output_file.exists():
+        raise PairingBundleError("output file already exists; choose a new path")
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        payload = {
+            "format": BUNDLE_FORMAT,
+            "pairing": (state_dir / "pairing.json").read_text(encoding="utf-8"),
+            "sdk_token": (state_dir / "sdk_token").read_text(encoding="utf-8").strip(),
+        }
+        with output_file.open("x", encoding="utf-8") as destination:
+            json.dump(payload, destination, separators=(",", ":"))
+            destination.write("\n")
+            destination.flush()
+            os.fsync(destination.fileno())
+        os.chmod(output_file, 0o600)
+    except (OSError, UnicodeError, ValueError) as exc:
+        try:
+            output_file.unlink()
+        except OSError:
+            pass
+        raise PairingBundleError("could not create the pairing bundle file") from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state-dir", type=Path,
                         default=Path(os.environ.get("MUSEGADGET_STATE_DIR", "/var/lib/musegadget")),
                         help="official Muse Gadget SDK state directory")
     parser.add_argument("--output", type=Path, required=True,
-                        help="new directory in which to stage the VitaShell bundle")
+                        help="new directory, or a .json file for the one-file phone transfer")
+    parser.add_argument("--one-file", action="store_true",
+                        help="write one musevita-pairing.json file instead of a directory")
     args = parser.parse_args(argv)
     try:
-        stage_bundle(args.state_dir, args.output)
+        if args.one_file or args.output.suffix.lower() == ".json":
+            stage_bundle_file(args.state_dir, args.output)
+        else:
+            stage_bundle(args.state_dir, args.output)
     except PairingBundleError as exc:
         print(f"MuseVita pairing bundle error: {exc}", file=sys.stderr)
         return 2
-    print(f"Staged {len(FILES)} files in {args.output}")
-    print("Copy these files to ux0:data/MuseVita/ with VitaShell, then launch MuseVita once.")
+    if args.one_file or args.output.suffix.lower() == ".json":
+        print(f"Created one phone-transfer bundle at {args.output}")
+        print("Scan the MuseVita QR code, choose this file, and press SELECT on the Vita.")
+    else:
+        print(f"Staged {len(FILES)} files in {args.output}")
+        print("Copy these files to ux0:data/MuseVita/ with VitaShell, then launch MuseVita once.")
     return 0
 
 

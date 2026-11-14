@@ -133,7 +133,7 @@ static void draw_status_page(vita2d_pgf *font, MuseVitaNetworkState network,
 
 static void draw_setup_page(vita2d_pgf *font, const MuseVitaPairingTransfer *transfer) {
     text(font, 70, 184, 31, WHITE, "Pair your Vita");
-    text(font, 70, 214, 18, MUTED, "Scan. Pick 3 files. Press SELECT.");
+    text(font, 70, 214, 18, MUTED, "Scan. Pick one bundle. Press SELECT.");
 
     vita2d_draw_rectangle(70, 238, 570, 55, CARD);
     text(font, 94, 272, 17, ACCENT, "1");
@@ -142,8 +142,8 @@ static void draw_setup_page(vita2d_pgf *font, const MuseVitaPairingTransfer *tra
 
     vita2d_draw_rectangle(70, 304, 570, 70, CARD);
     text(font, 94, 337, 17, ACCENT, "2");
-    text(font, 142, 328, 19, WHITE, "Pick 3 files");
-    text(font, 142, 350, 15, MUTED, "identity.json  •  pairing.json  •  sdk_token");
+    text(font, 142, 328, 19, WHITE, "Pick one bundle");
+    text(font, 142, 350, 15, MUTED, "musevita-pairing.json");
 
     vita2d_draw_rectangle(70, 385, 570, 43, CARD);
     text(font, 94, 413, 17, ACCENT, "3");

@@ -66,6 +66,7 @@ typedef struct MuseVitaSession {
     char register_request_id[40];
     char access_token[2048];
     char refresh_token[2048];
+    uint64_t access_token_saved_at;
     char sdk_token[256];
     char mac[32];
     char node_id[64];

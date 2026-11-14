@@ -49,6 +49,14 @@ The user-facing QR carries a temporary session reference, not a Muse account tok
 
 Prefer an audited OS-native BLE helper for macOS/Windows/Linux with the official flow, no embedded SDK token, and explicit confirmation. Start by proving compatible pairing on a platform that can advertise BLE; transfer state only after successful pairing, then stop/unpair the helper locally. Distribution of such a utility must follow Meta's SDK terms.
 
-## Transfer design for future milestone
+## Current one-time transfer design
 
-Vita should generate an ephemeral receiver key pair and show `session_id` plus public key in a QR. Pairing helper verifies the session and user confirmation, encrypts only for that Vita's public key and uploads ciphertext to a short-lived relay. Vita downloads ciphertext and decrypts locally. Enforce single redemption, expiry, rate limits, origin checks, HTTPS/HSTS and no logs of secrets or ciphertext. Do not use ad hoc crypto or put an access/refresh token in a QR.
+Vita generates an ephemeral receiver key pair and shows `session_id` plus the
+public key in a QR. The phone downloads only the Vita's non-secret identity
+from the pinned local session, reads one validated `musevita-pairing.json`
+bundle produced after official pairing, encrypts the pairing state only for
+that Vita public key, and uploads ciphertext locally. Vita decrypts and
+validates it, then accepts one redemption before storing encrypted credentials.
+The session expires, the upload is single-use, and no access/refresh token or
+SDK token is placed in the QR or served by the local identity endpoint. Do not
+use ad hoc crypto or treat the QR as account authorization.

@@ -26,6 +26,7 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn("'='.repeat((4-raw.length%4)%4)", page)
         self.assertNotIn("pinned.replaceAll('-','+').replaceAll('_','/')+'=='", page)
         self.assertIn("/pair/upload", page)
+        self.assertIn("/pair/identity", page)
         self.assertIn("MuseVitaCrypto.seal", page)
         self.assertIn("globalThis.crypto&&globalThis.crypto.subtle", page)
         self.assertNotIn("access_token", page)
@@ -53,6 +54,13 @@ class PairingTransferTests(unittest.TestCase):
         self.assertIn('session->node_id, session->sdk_token', refresh)
         self.assertIn('"{\\"device_id\\":\\"%s\\"}"', refresh)
         self.assertNotIn('session->device_id, session->sdk_token', refresh)
+
+    def test_token_refresh_is_age_based_and_persists_timestamp(self):
+        source = (ROOT / "vita/src/muse_session.c").read_text()
+        self.assertIn('"access_token_saved_at"', source)
+        self.assertIn("TOKEN_REFRESH_AGE_SECONDS", source)
+        self.assertIn("current_time - session->access_token_saved_at", source)
+        self.assertIn("session->access_token_saved_at = now_seconds();", source)
 
     def test_vm_lookup_accepts_official_vm_name_fallback(self):
         source = (ROOT / "vita/src/muse_session.c").read_text()
@@ -126,7 +134,8 @@ class PairingTransferTests(unittest.TestCase):
     def test_phone_onboarding_is_short_and_action_oriented(self):
         page = (ROOT / "vita/assets/pairing.html").read_text()
         self.assertIn("Pair your Vita", page)
-        self.assertIn("Pick 3 files", page)
+        self.assertIn("Pick one bundle", page)
+        self.assertIn("musevita-pairing.json", page)
         self.assertIn("Send securely", page)
         self.assertIn("Need help?", page)
         self.assertNotIn("official identity.json", page)
@@ -134,9 +143,17 @@ class PairingTransferTests(unittest.TestCase):
     def test_vita_onboarding_uses_short_actions(self):
         source = (ROOT / "vita/src/main.c").read_text()
         self.assertIn('"Pair your Vita"', source)
-        self.assertIn('"Scan. Pick 3 files. Press SELECT."', source)
+        self.assertIn('"Scan. Pick one bundle. Press SELECT."', source)
         self.assertIn('"Scan QR"', source)
+        self.assertIn('"Pick one bundle"', source)
         self.assertIn('"Press SELECT"', source)
+
+    def test_identity_download_is_local_and_credential_free(self):
+        source = (ROOT / "vita/src/pairing_transfer.c").read_text()
+        route = source[source.index('"/pair/identity"'):source.index('"/pair/config"')]
+        self.assertIn('IDENTITY_PATH', route)
+        self.assertNotIn("PAIRING_PATH", route)
+        self.assertNotIn("SDK_TOKEN_PATH", route)
 
     def test_pairing_listener_only_starts_on_setup_page(self):
         source = (ROOT / "vita/src/main.c").read_text()

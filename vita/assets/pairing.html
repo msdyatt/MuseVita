@@ -28,58 +28,78 @@ code{font-size:.9em;color:var(--ink)}
 <main>
   <div class="eyebrow">MUSEVITA</div>
   <h1>Pair your Vita</h1>
-  <p class="lede">Scan. Pick 3 files. Send.</p>
+  <p class="lede">Scan. Pick one bundle. Send.</p>
 
   <section class="step">
     <div class="number">1</div>
     <div class="step-body">
-      <h2>Pick 3 files</h2>
-      <p>Choose them in the Files app.</p>
-      <label class="file-button"><input id="files" type="file" multiple><span id="choose">Choose files</span></label>
-      <div id="files-list">○ identity.json<br>○ pairing.json<br>○ sdk_token</div>
+      <h2>Identity ready</h2>
+      <p>The Vita supplies this automatically.</p>
+      <div id="identity-state">… Connecting to Vita</div>
     </div>
   </section>
 
   <section class="step">
     <div class="number">2</div>
     <div class="step-body">
+      <h2>Choose one bundle</h2>
+      <p>Use <code>musevita-pairing.json</code> from the official SDK.</p>
+      <label class="file-button"><input id="file" type="file" accept=".json,application/json"><span id="choose">Choose bundle</span></label>
+      <div id="files-list">○ musevita-pairing.json</div>
+    </div>
+  </section>
+
+  <section class="step">
+    <div class="number">3</div>
+    <div class="step-body">
       <h2>Send to Vita</h2>
-      <p>They are encrypted before sending.</p>
+      <p>Encrypted before sending.</p>
       <button id="send" disabled>Send securely</button>
     </div>
   </section>
 
-  <div id="status" role="status" aria-live="polite">Waiting for files…</div>
+  <div id="status" role="status" aria-live="polite">Connecting to Vita…</div>
   <details>
     <summary>Need help?</summary>
-    <p>Your phone and Vita must be on the same Wi‑Fi. If scanning does not open this page, type <code>http://VITA-IP:8768/</code> in Safari. The Vita shows its address beside the QR code.</p>
+    <p>The official SDK creates the one bundle after pairing. Your phone and Vita must be on the same Wi‑Fi. If scanning does not open this page, type <code>http://VITA-IP:8768/</code> in Safari.</p>
   </details>
 </main>
 <script src="/pairing-crypto.js"></script>
 <script>
 const $=id=>document.getElementById(id), p=new URLSearchParams(location.search), sid=p.get('s'), pinned=p.get('k');
-const required=['identity.json','pairing.json','sdk_token'];
 const enc=new TextEncoder(), b64=u=>{let s='';for(const x of u)s+=String.fromCharCode(x);return btoa(s).replaceAll('+','-').replaceAll('/','_').replaceAll('=','')};
-let chosen=[];
+let chosen=null, identityText='';
 function updateFiles(){
-  const names=new Set(chosen.map(f=>f.name));
-  $('files-list').innerHTML=required.map(name=>names.has(name)?'<span class="ready">✓ '+name+'</span>':'○ '+name).join('<br>');
-  $('send').disabled=!required.every(name=>names.has(name));
-  $('choose').textContent=chosen.length?'Change files':'Choose files';
+  $('files-list').innerHTML=chosen?'<span class="ready">✓ '+chosen.name+'</span>':'○ musevita-pairing.json';
+  $('choose').textContent=chosen?'Change bundle':'Choose bundle';
+  $('send').disabled=!chosen||!identityText;
   if(!$('send').disabled)$('status').textContent='Ready — send when you are ready.';
 }
-$('files').onchange=e=>{chosen=[...e.target.files];updateFiles()};
+async function loadIdentity(){
+  if(!sid)throw Error('Scan the QR code again.');
+  const response=await fetch('/pair/identity?s='+encodeURIComponent(sid));
+  if(!response.ok)throw Error('The Vita setup code expired. Scan again.');
+  const text=await response.text();
+  const identity=JSON.parse(text);
+  if(!identity||typeof identity.mac!=='string')throw Error('The Vita identity is unavailable.');
+  identityText=text;
+  $('identity-state').innerHTML='<span class="ready">✓ Downloaded from Vita</span>';
+  updateFiles();
+}
+$('file').onchange=e=>{chosen=e.target.files[0]||null;updateFiles()};
 async function go(){try{
   if(!sid||!pinned)throw Error('This setup link is incomplete. Scan the QR code again.');
-  const names=new Set(chosen.map(f=>f.name));
-  if(!required.every(name=>names.has(name)))throw Error('Choose identity.json, pairing.json, and sdk_token.');
+  if(!chosen)throw Error('Choose the MuseVita pairing bundle.');
+  const bundle=JSON.parse(await chosen.text());
+  if(!bundle||bundle.format!=='musevita-pairing-v1'||typeof bundle.pairing!=='string'||typeof bundle.sdk_token!=='string')
+    throw Error('Choose a musevita-pairing.json bundle from the official SDK.');
   const cfgResponse=await fetch('/pair/config?s='+encodeURIComponent(sid));
   if(!cfgResponse.ok)throw Error('The Vita setup code expired. Reopen SETUP and scan again.');
   const cfg=await cfgResponse.json();
   if(cfg.sid!==sid||cfg.pub!==pinned)throw Error('This code belongs to a different Vita. Scan again.');
   const raw=pinned.replaceAll('-','+').replaceAll('_','/');
   const vitaBytes=Uint8Array.from(atob(raw+'='.repeat((4-raw.length%4)%4)),c=>c.charCodeAt(0));
-  const obj={};for(const f of chosen)obj[f.name==='sdk_token'?'sdk_token':f.name.slice(0,-5)]=await f.text();
+  const obj={identity:identityText,pairing:bundle.pairing,sdk_token:bundle.sdk_token};
   let epk,iv,ct;
   if(globalThis.crypto&&globalThis.crypto.subtle){
     const vita=await crypto.subtle.importKey('raw',vitaBytes,{name:'ECDH',namedCurve:'P-256'},false,[]);
@@ -97,4 +117,5 @@ async function go(){try{
   $('status').textContent='Done — return to the Vita and press SELECT.';$('send').disabled=true;
 }catch(e){$('status').textContent=e&&e.message?e.message:'Something went wrong. Please scan again.'}}
 $('send').onclick=go;
+loadIdentity().catch(e=>{$('identity-state').textContent=e&&e.message?e.message:'Vita identity unavailable';$('status').textContent=e&&e.message?e.message:'Scan again.';updateFiles()});
 </script>

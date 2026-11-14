@@ -6,7 +6,7 @@ import unittest
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
-from prepare_musevita_pairing import PairingBundleError, stage_bundle
+from prepare_musevita_pairing import BUNDLE_FORMAT, PairingBundleError, stage_bundle, stage_bundle_file
 
 
 class PairingBundleTests(unittest.TestCase):
@@ -44,6 +44,18 @@ class PairingBundleTests(unittest.TestCase):
             (state / "pairing.json").write_text(json.dumps(pairing))
             with self.assertRaises(PairingBundleError):
                 stage_bundle(state, root / "vita-bundle")
+
+    def test_creates_one_file_phone_bundle_without_printing_credentials(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            state = self._make_state(root)
+            output = root / "musevita-pairing.json"
+            stage_bundle_file(state, output)
+            bundle = json.loads(output.read_text())
+            self.assertEqual(bundle["format"], BUNDLE_FORMAT)
+            self.assertIn('"access_token"', bundle["pairing"])
+            self.assertEqual(bundle["sdk_token"], (state / "sdk_token").read_text().strip())
+            self.assertEqual(os.stat(output).st_mode & 0o777, 0o600)
 
 
 if __name__ == "__main__":

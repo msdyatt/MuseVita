@@ -22,6 +22,7 @@
 #define TRANSFER_MAX_PLAINTEXT (MUSEVITA_PAIRING_IDENTITY_MAX + MUSEVITA_PAIRING_JSON_MAX + 512u)
 #define TRANSFER_HTML_PATH "app0:/sce_sys/pairing.html"
 #define TRANSFER_CRYPTO_PATH "app0:/sce_sys/pairing-crypto.js"
+#define IDENTITY_PATH "ux0:data/MuseVita/identity.json"
 #define TRANSFER_ASSET_MAX 131072u
 #define TRANSFER_TTL_US (10ULL * 60ULL * 1000000ULL)
 
@@ -276,6 +277,14 @@ static int handle_request(MuseVitaPairingTransfer *transfer, int socket) {
                  transfer->session_id, transfer->public_key_b64);
         return session_live(transfer) ? send_redirect(socket, location) :
                                         send_text(socket, 403, "text/plain", "Invalid or expired session");
+    }
+    if (strncmp(method, "GET", 4) == 0 && strncmp(path, "/pair/identity", 14) == 0) {
+        if (!session_live(transfer) || !strstr(path, transfer->session_id))
+            return send_text(socket, 403, "text/plain", "Invalid or expired session");
+        /* The identity is not an account credential. Serving it from the
+           pinned local session removes one manual VitaShell step; pairing
+           and SDK tokens are never exposed by this endpoint. */
+        return send_file(socket, IDENTITY_PATH, "application/json");
     }
     if (strncmp(method, "GET", 4) == 0 && strncmp(path, "/pair/config", 12) == 0) {
         char response[256];
