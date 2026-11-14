@@ -32,7 +32,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Vita Wi-Fi status provider | Implemented; host-mockable interface is in place |
 | VitaSDK/CMake packaging | Built with VitaSDK 2026.08 and `libvita2d` |
 | Shared control-stream framing, link wire builders, and decoders | Implemented and host-tested |
-| Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime fixture still pending |
+| Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime handshake and encrypted-payload fixture passes against the pinned official SDK |
 | On-device QR pairing transfer | Implemented in the Vita build: one-time local HTTP page, QR session/key pinning, browser WebCrypto encryption; physical-phone validation pending |
 | Local QR setup page | Development-only demo remains separate from the on-device transfer |
 | Approved Meta pairing and one-time transfer | Official pairing-state import implemented; on-device BLE pairing is not |
