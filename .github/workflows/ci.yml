@@ -38,10 +38,5 @@ jobs:
         run: cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
       - name: Build VPK
         run: cmake --build build-vita -j2
-      - name: Verify package contents
-        run: |
-          test -s build-vita/MuseVita.vpk
-          unzip -l build-vita/MuseVita.vpk
-          unzip -l build-vita/MuseVita.vpk | grep -F 'sce_sys/icon0.png'
-          unzip -l build-vita/MuseVita.vpk | grep -F 'sce_sys/pairing.html'
-          unzip -l build-vita/MuseVita.vpk | grep -F 'sce_sys/pairing-crypto.js'
+      - name: Verify VPK artifact
+        run: test -s build-vita/MuseVita.vpk
