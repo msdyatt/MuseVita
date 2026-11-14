@@ -159,6 +159,19 @@ class PairingTransferTests(unittest.TestCase):
         source = (ROOT / "vita/src/main.c").read_text()
         self.assertIn("page == PAGE_SETUP && network == MUSEVITA_NETWORK_ONLINE", source)
 
+    def test_pairing_thread_receives_pointer_argument_safely(self):
+        source = (ROOT / "vita/src/pairing_transfer.c").read_text()
+        thread_start = source.index("static int transfer_thread")
+        start_call = source.index("sceKernelStartThread", thread_start)
+        thread_block = source[thread_start:start_call]
+        self.assertIn("if (arg == NULL || args != sizeof(transfer)) return -1;", thread_block)
+        self.assertIn("transfer = *(MuseVitaPairingTransfer **)arg;", thread_block)
+        self.assertIn(
+            "sceKernelStartThread(transfer->thread, sizeof(transfer), &transfer)",
+            source,
+        )
+        self.assertNotIn("sceKernelStartThread(transfer->thread, 0, NULL)", source)
+
 
 if __name__ == "__main__":
     unittest.main()
