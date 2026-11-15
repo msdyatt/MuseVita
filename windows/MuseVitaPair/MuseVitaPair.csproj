@@ -8,7 +8,7 @@
     <UseWinRT>true</UseWinRT>
   </PropertyGroup>
   <ItemGroup>
-    <!-- Provides the Windows Runtime BLE/GATT projection when built by the Windows SDK. -->
-    <PackageReference Include="Microsoft.Windows.SDK.Contracts" Version="10.0.22621.3233" />
+    <!-- .NET-compatible Windows Runtime projections; Contracts' raw WinMDs do not build on .NET 5+. -->
+    <PackageReference Include="Microsoft.Windows.SDK.NET.Ref" Version="10.0.26100.87" />
   </ItemGroup>
 </Project>
