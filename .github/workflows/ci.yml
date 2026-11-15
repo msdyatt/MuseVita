@@ -40,3 +40,10 @@ jobs:
         run: cmake --build build-vita -j2
       - name: Verify VPK artifact
         run: test -s build-vita/MuseVita.vpk
+      - name: Upload VPK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MuseVita-vpk
+          path: build-vita/MuseVita.vpk
+          if-no-files-found: error
+          retention-days: 14
