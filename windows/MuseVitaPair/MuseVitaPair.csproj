@@ -7,8 +7,4 @@
     <Nullable>enable</Nullable>
     <UseWinRT>true</UseWinRT>
   </PropertyGroup>
-  <ItemGroup>
-    <!-- .NET-compatible Windows Runtime projections; Contracts' raw WinMDs do not build on .NET 5+. -->
-    <PackageReference Include="Microsoft.Windows.SDK.NET.Ref" Version="10.0.26100.87" />
-  </ItemGroup>
 </Project>
