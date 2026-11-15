@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Package xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
          xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+         xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+         xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
          xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-         IgnorableNamespaces="uap rescap">
+         IgnorableNamespaces="uap uap3 desktop rescap">
   <Identity Name="MuseVitaPair" Publisher="CN=MuseVita" Version="1.0.0.0" />
   <Properties><DisplayName>MuseVita Pair</DisplayName><PublisherDisplayName>MuseVita</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo></Properties>
   <Resources><Resource Language="en-us" /></Resources>
   <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.15063.0" MaxVersionTested="10.0.26300.0" /></Dependencies>
   <Capabilities><rescap:Capability Name="runFullTrust" /><DeviceCapability Name="bluetooth" /></Capabilities>
-  <Applications><Application Id="App" Executable="musevita-pair.exe" EntryPoint="Windows.FullTrustApplication"><uap:VisualElements DisplayName="MuseVita Pair" Description="MuseVita one-time pairing companion" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="transparent" /></Application></Applications>
+  <Applications><Application Id="App" Executable="musevita-pair.exe" EntryPoint="Windows.FullTrustApplication"><uap:VisualElements DisplayName="MuseVita Pair" Description="MuseVita one-time pairing companion" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" BackgroundColor="transparent" /><Extensions><uap3:Extension Category="windows.appExecutionAlias" Executable="musevita-pair.exe" EntryPoint="Windows.FullTrustApplication"><uap3:AppExecutionAlias><desktop:ExecutionAlias Alias="musevita-pair.exe" /></uap3:AppExecutionAlias></uap3:Extension></Extensions></Application></Applications>
 </Package>
