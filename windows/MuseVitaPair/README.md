@@ -48,4 +48,8 @@ OAuth flow is used.
 
 Physical discovery/pairing has not been tested here. A real Windows PC with a
 Bluetooth adapter that supports LE peripheral/GATT-server mode is required; an
-adapter that supports scanning alone is insufficient.
+adapter that supports scanning alone is insufficient. Windows' supported
+advertising API does not permit an app to set a custom BLE local name, so the
+GATT service advertises this PC's system Bluetooth name rather than
+`MuseGadgetXXXXXX`; whether the Muse app accepts discovery by service is a
+real-device check.

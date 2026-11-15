@@ -18,8 +18,8 @@ try
     var token = await SdkToken.ReadAsync(Next(options, "--sdk-token-file"), CancellationToken.None); var output = Path.GetFullPath(Next(options, "--output") ?? "musevita-pairing.json");
     var session = new PairingSession(identity, "0.1.0", token);
     session.OnProvisionAsync = async credentials => { if (!await MuseCredentialValidator.ValidateAsync(credentials, CancellationToken.None)) { Console.Error.WriteLine("Muse rejected the returned device credentials."); return false; } await PairingBundleWriter.WriteAsync(output, credentials, token, CancellationToken.None); Console.WriteLine($"Pairing complete. Wrote {output}"); return true; };
-    await using var ble = new WindowsBlePairingServer(session); await ble.StartAsync(identity.BleName);
-    Console.WriteLine($"Pairing is open as {identity.BleName}. In the Muse app use Settings > Devices > Developer mode > Add Device.");
+    await using var ble = new WindowsBlePairingServer(session); await ble.StartAsync();
+    Console.WriteLine($"Pairing GATT service is open. Windows advertises its system Bluetooth name rather than {identity.BleName}; in the Muse app use Settings > Devices > Developer mode > Add Device and look for this PC.");
     Console.WriteLine("Physical Muse-app discovery on Windows is unverified. Press Enter to stop advertising."); Console.ReadLine();
 }
 catch (Exception error) { Console.Error.WriteLine($"MuseVita pairing: {error.Message}"); Environment.ExitCode = 1; }
