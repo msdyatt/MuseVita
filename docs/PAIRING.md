@@ -89,6 +89,18 @@ file with owner-only permissions. This Mac flow is implemented and compile-
 tested, but physical pairing still needs to be tested with the Muse app on a
 Mac that has Bluetooth LE available.
 
+## Pair directly from Windows
+
+The repository also contains the Windows native source companion at `windows/MuseVitaPair`. Deploy it with its included Bluetooth-capable package manifest on Windows 10 version 1703+ or Windows 11, then use the Vita SETUP URL:
+
+```powershell
+musevita-pair --vita-url http://VITA-IP:8768/ --output .\musevita-pairing.json
+```
+
+The companion reads the Vita's non-secret identity through the one-time `/pair`/`/pair/identity` session, advertises `MuseGadgetXXXXXX`, and uses the published community v5 GATT setup exchange. It reads the user-owned SDK token from Credential Manager, `--sdk-token-file`, or a hidden prompt—not a command-line token. After the Muse app approves provisioning, it certificate-validates the returned device credential at HTTPS `/fetch_vms` and writes the one-file bundle with owner-only ACLs where Windows supports them.
+
+This path is build- and public-vector-tested only. A real Windows Bluetooth adapter with LE peripheral/GATT-server support and an iPhone running the Muse app are still required to establish that the app can discover and pair. No permanent Windows bridge is needed after pairing; the Vita connects over Wi-Fi.
+
 ## Optional phone transfer
 
 After the official host has produced the bundle, the Vita can transfer it

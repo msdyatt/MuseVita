@@ -23,3 +23,5 @@ Before any public deployment or real credential transfer:
 6. Treat the pairing helper as privileged and untrusted input as potentially hostile. Protect against token leakage through telemetry, screenshots, crash logs, browser URLs, referrers and clipboard history.
 7. Ensure one device identity only has one live registration session. Revoke/unpair safely, including old pairing host copies.
 8. Do a security review before public launch. The starter web server is not production ready and should not be internet exposed.
+
+The Windows pairing companion keeps an SDK token out of command-line arguments and logs, uses Credential Manager or an explicit local token file/hidden prompt, and applies an owner-only ACL to its output where supported. It accepts the Vita identity only from the one-time same-host `/pair` session, uses strict un-padded Base64URL and ordered AES-GCM records, and validates the provisioned device credential via certificate-validated HTTPS `/fetch_vms` before it writes a bundle. It does not accept a Muse password, Web cookie, or browser session, and it does not weaken certificate validation.

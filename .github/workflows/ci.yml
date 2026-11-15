@@ -49,3 +49,17 @@ jobs:
           path: build-vita/MuseVita.vpk
           if-no-files-found: error
           retention-days: 14
+
+  windows-pairing:
+    name: Build and test Windows pairing companion
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      # Protocol tests do not require a Bluetooth controller or Muse account.
+      - name: Build Windows pairing companion
+        run: dotnet build windows/MuseVitaPair/MuseVitaPair.csproj --configuration Release
+      - name: Run Windows pairing unit tests
+        run: dotnet test windows/MuseVitaPair.Tests/MuseVitaPair.Tests.csproj --configuration Release

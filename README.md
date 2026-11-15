@@ -35,7 +35,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime handshake and encrypted-payload fixture passes against the pinned official SDK |
 | On-device QR pairing transfer | Implemented in the Vita build: one-time local HTTP page, QR session/key pinning, browser WebCrypto encryption; physical-phone validation pending |
 | Local QR setup page | Development-only demo remains separate from the on-device transfer |
-| Approved Meta pairing and one-time transfer | macOS CoreBluetooth companion implemented; physical Muse-app pairing remains unverified here |
+| Approved Meta pairing and one-time transfer | macOS CoreBluetooth and Windows Runtime GATT companions implemented at source level; physical Muse-app pairing remains unverified here |
 | Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
 | HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
 | WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
@@ -108,6 +108,8 @@ swift run --package-path mac/MuseVitaPair musevita-pair \
 See [docs/PAIRING.md](docs/PAIRING.md) for the SDK-token handling and Muse-app
 steps. The companion is build- and vector-tested, but has not been paired with
 a physical Muse phone in this environment.
+
+On Windows 10 version 1703+ or Windows 11, the native Windows Runtime companion can provide the same one-time GATT service after deployment with its Bluetooth-capable package manifest. It needs an adapter that supports BLE peripheral/GATT-server mode; it has source-level vector tests but has **not** been physically tested with the Muse app. See [windows/MuseVitaPair](windows/MuseVitaPair/README.md). The Windows host is not a permanent bridge: after pairing, the Vita connects over Wi-Fi directly.
 
 ## Build the Vita application
 
