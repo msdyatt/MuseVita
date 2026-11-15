@@ -5,6 +5,7 @@ namespace MuseVitaPair.Core;
 
 public static class VitaIdentitySource
 {
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     // The Vita endpoint intentionally redirects to a one-time /pair session. Never follow a redirect to another host.
     public static async Task<PairingIdentity> FetchAsync(Uri setupUrl, CancellationToken cancellationToken)
     {
@@ -21,11 +22,11 @@ public static class VitaIdentitySource
         if (string.IsNullOrEmpty(session)) throw new InvalidDataException("The Vita pairing session is missing.");
         var identityEndpoint = new UriBuilder(setupUrl) { Path = "/pair/identity", Query = "s=" + Uri.EscapeDataString(session) }.Uri;
         using var response = await client.GetAsync(identityEndpoint, cancellationToken); response.EnsureSuccessStatusCode();
-        var identity = await JsonSerializer.DeserializeAsync<PairingIdentity>(await response.Content.ReadAsStreamAsync(cancellationToken), cancellationToken: cancellationToken) ?? throw new InvalidDataException("The Vita returned no identity.");
+        var identity = await JsonSerializer.DeserializeAsync<PairingIdentity>(await response.Content.ReadAsStreamAsync(cancellationToken), JsonOptions, cancellationToken) ?? throw new InvalidDataException("The Vita returned no identity.");
         identity.Validate(); return identity;
     }
     public static async Task<PairingIdentity> ReadFileAsync(string path, CancellationToken cancellationToken)
     {
-        await using var input = File.OpenRead(path); var identity = await JsonSerializer.DeserializeAsync<PairingIdentity>(input, cancellationToken: cancellationToken) ?? throw new InvalidDataException("Identity file is empty."); identity.Validate(); return identity;
+        await using var input = File.OpenRead(path); var identity = await JsonSerializer.DeserializeAsync<PairingIdentity>(input, JsonOptions, cancellationToken) ?? throw new InvalidDataException("Identity file is empty."); identity.Validate(); return identity;
     }
 }

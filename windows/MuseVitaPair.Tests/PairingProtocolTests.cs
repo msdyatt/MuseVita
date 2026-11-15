@@ -13,6 +13,7 @@ public sealed class PairingProtocolTests
     private const string DevicePublic = "BHzyexiNA09-ilI4AwS1GsPAiWnid_IbNaYLSPxHZpl4B3dVENuO0EApPZrGn3Qw27p9reY86YIpngS3nSJ4c9E";
 
     [Fact] public void IdentityDerivationMatchesMuseGadgetConvention() { Assert.Equal("homelink-000001", Identity.NodeId); Assert.Equal("hatch-link:02:00:00:00:00:01", Identity.DeviceId); Assert.Equal("MuseGadget000001", Identity.BleName); }
+    [Fact] public void LowercaseMacIdentityDeserializes() { var identity = JsonSerializer.Deserialize<PairingIdentity>("{\"mac\":\"02:00:00:00:00:01\"}")!; identity.Validate(); Assert.Equal(Identity, identity); }
     [Fact] public void Base64UrlIsUnpaddedAndStrict() { Assert.Equal("-_8", Base64Url.Encode(new byte[] { 0xfb, 0xff })); Assert.Equal(new byte[] { 0xfb, 0xff }, Base64Url.Decode("-_8")); Assert.Throws<FormatException>(() => Base64Url.Decode("ab=c")); }
     [Fact] public void BleFramingRoundTripsAndRejectsOutOfOrderChunks()
     {

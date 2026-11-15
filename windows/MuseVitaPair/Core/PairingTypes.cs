@@ -2,7 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace MuseVitaPair.Core;
 
-public sealed record PairingIdentity(string Mac)
+public sealed record PairingIdentity([property: JsonPropertyName("mac")] string Mac)
 {
     public string CompactSuffix => Mac.Replace(":", "", StringComparison.Ordinal).ToLowerInvariant()[^6..];
     public string NodeId => $"homelink-{CompactSuffix}";
@@ -11,7 +11,7 @@ public sealed record PairingIdentity(string Mac)
 
     public void Validate()
     {
-        if (!System.Text.RegularExpressions.Regex.IsMatch(Mac, "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"))
+        if (string.IsNullOrWhiteSpace(Mac) || !System.Text.RegularExpressions.Regex.IsMatch(Mac, "^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$"))
             throw new InvalidDataException("The Vita identity has an invalid MAC-shaped identity.");
     }
 }
