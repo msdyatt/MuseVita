@@ -6,12 +6,13 @@ Windows Runtime `GattServiceProvider`, `GattLocalCharacteristic`, and
 `BluetoothLEAdvertisementPublisher`; it is not a browser login, cookie bridge,
 or permanent relay. MuseVita connects directly over Wi-Fi after pairing.
 
-The included `Properties/Package.appxmanifest` declares the `bluetooth` device
-capability. Deploy this project in a package with identity (for example, add it
-to a Visual Studio Windows Application Packaging/MSIX project and use that
-manifest); BLE GATT-server capability is adapter-dependent. The normal build
-below validates the companion source and protocol tests, but cannot establish
-that a particular adapter can advertise the required record.
+The included `Properties/Package.appxmanifest` declares package identity,
+full-trust, the `bluetooth` device capability, and the `musevita-pair.exe`
+app-execution alias. Deploy it in an MSIX package or a Developer Mode package
+registration to make that command available. BLE GATT-server capability remains
+adapter-dependent. The normal build below validates the companion source and
+protocol tests, but cannot establish that a particular adapter can advertise the
+required record.
 
 ## Build and test
 
