@@ -62,7 +62,7 @@ public static class PairingProtocol
         using var imported = ECDiffieHellman.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = data[1..33], Y = data[33..65] } });
         return imported.PublicKey;
     }
-    public static byte[] RawSecret(ECDiffieHellman privateKey, ECDiffieHellmanPublicKey publicKey) => ECDiffieHellman.DeriveRawSecretAgreement(privateKey, publicKey);
+    public static byte[] RawSecret(ECDiffieHellman privateKey, ECDiffieHellmanPublicKey publicKey) => privateKey.DeriveRawSecretAgreement(publicKey);
 
     private static byte[] HkdfExtractAndExpand(byte[] ikm, byte[] salt, byte[] info) => HkdfExpand(HMACSHA256.HashData(salt, ikm), info);
     private static byte[] HkdfExpand(byte[] prk, byte[] info)
