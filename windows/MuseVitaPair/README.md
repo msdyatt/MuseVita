@@ -15,7 +15,7 @@ that a particular adapter can advertise the required record.
 
 ## Build and test
 
-Install the .NET 8 SDK and the Windows 10 SDK, then run:
+Install the .NET 9 SDK and the Windows 10 SDK, then run:
 
 ```powershell
 dotnet test windows/MuseVitaPair.Tests/MuseVitaPair.Tests.csproj --configuration Release
