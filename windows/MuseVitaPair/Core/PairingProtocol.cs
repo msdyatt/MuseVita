@@ -62,7 +62,7 @@ public static class PairingProtocol
         using var imported = ECDiffieHellman.Create(new ECParameters { Curve = ECCurve.NamedCurves.nistP256, Q = new ECPoint { X = data[1..33], Y = data[33..65] } });
         return imported.PublicKey;
     }
-    public static byte[] RawSecret(ECDiffieHellman privateKey, ECDiffieHellmanPublicKey publicKey) => ECDiffieHellman.DeriveRawSecretAgreement(privateKey.PrivateKey, publicKey);
+    public static byte[] RawSecret(ECDiffieHellman privateKey, ECDiffieHellmanPublicKey publicKey) => ECDiffieHellman.DeriveRawSecretAgreement(privateKey, publicKey);
 
     private static byte[] HkdfExtractAndExpand(byte[] ikm, byte[] salt, byte[] info) => HkdfExpand(HMACSHA256.HashData(salt, ikm), info);
     private static byte[] HkdfExpand(byte[] prk, byte[] info)
@@ -143,6 +143,10 @@ public sealed class PairingSession
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNamingPolicy = null };
     private static string String(JsonElement e, string name) => e.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? "" : "";
     private static string Https(JsonElement e, string name) { var value = String(e, name); return value.StartsWith("https://", StringComparison.OrdinalIgnoreCase) ? value : ""; }
-    private static bool TryCounter(string? value, out ulong counter) => !string.IsNullOrWhiteSpace(value) && value.All(char.IsAsciiDigit) && ulong.TryParse(value, out counter);
+    private static bool TryCounter(string? value, out ulong counter)
+    {
+        counter = 0;
+        return !string.IsNullOrWhiteSpace(value) && value.All(char.IsAsciiDigit) && ulong.TryParse(value, out counter);
+    }
     private void Reset() { _rx = _tx = null; _sessionId = ""; _rxCounter = _txCounter = 0; _waiting = _confirmed = false; }
 }
