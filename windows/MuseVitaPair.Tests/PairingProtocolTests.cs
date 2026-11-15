@@ -16,8 +16,9 @@ public sealed class PairingProtocolTests
     [Fact] public void Base64UrlIsUnpaddedAndStrict() { Assert.Equal("-_8", Base64Url.Encode(new byte[] { 0xfb, 0xff })); Assert.Equal(new byte[] { 0xfb, 0xff }, Base64Url.Decode("-_8")); Assert.Throws<FormatException>(() => Base64Url.Decode("ab=c")); }
     [Fact] public void BleFramingRoundTripsAndRejectsOutOfOrderChunks()
     {
-        var data = Enumerable.Range(0, 600).Select(x => (byte)x).ToArray(); var chunks = BleFraming.Encode(data, 23); var reader = new ChunkAssembler();
-        Assert.Equal(data, chunks.Select(chunk => reader.Feed(chunk)).Last()); var bad = new ChunkAssembler(); Assert.Null(bad.Feed(chunks[0])); Assert.Null(bad.Feed(chunks[2]));
+        var data = Enumerable.Range(0, 600).Select(x => (byte)x).ToArray(); var chunks = BleFraming.Encode(data, 23); var reader = new ChunkAssembler(); byte[]? complete = null;
+        foreach (var chunk in chunks) complete = reader.Feed(chunk);
+        Assert.Equal(data, complete); var bad = new ChunkAssembler(); Assert.Null(bad.Feed(chunks[0])); Assert.Null(bad.Feed(chunks[2]));
     }
     [Fact] public void CommunityAppV5PublishedKeyScheduleMatches()
     {
