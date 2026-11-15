@@ -42,6 +42,32 @@ The helper is intentionally required only for initial provisioning or a
 re-pair. The normal MuseVita runtime does not depend on Linux, macOS, or a
 relay process.
 
+## Recommended: send directly from the pairing host
+
+If the official SDK state already exists on the pairing host, no bundle file
+or phone is needed. Put the Vita on the same Wi-Fi network, open MuseVita's
+SETUP page, and use the manual URL shown below its QR code (for example,
+`http://192.168.1.42:8768/`). Then run this on the host that owns the official
+SDK state:
+
+```sh
+npm --prefix tools install
+node tools/send_musevita_pairing.js \
+  --state-dir /var/lib/musegadget \
+  --vita-url http://192.168.1.42:8768/
+```
+
+The helper reads `identity.json`, `pairing.json`, and `sdk_token` in memory,
+checks that the identity belongs to this Vita, encrypts the transfer using the
+same ephemeral ECDH/HKDF/AES-GCM protocol as the QR page, and exits after one
+upload. It does not print or create a credential file. Press SELECT on the
+Vita when it reports that the pairing was sent.
+
+This removes the download/upload step; it does not create a new login path.
+The official SDK state must already have been created by Meta's supported
+Gadget SDK pairing flow. The helper never scrapes Muse Web cookies, accepts a
+Muse password, or sends credentials to a public server.
+
 ## Optional phone transfer
 
 After the official host has produced the bundle, the Vita can transfer it

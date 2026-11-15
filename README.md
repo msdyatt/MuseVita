@@ -82,6 +82,19 @@ The local transfer server stops accepting uploads after the first successful
 bundle. This path is source-tested and cross-compiled, but still needs a
 physical phone/Vita transfer test before release claims.
 
+For a no-file setup, the supported pairing host can send its already-created
+official SDK state directly to the Vita:
+
+```sh
+npm --prefix tools install
+node tools/send_musevita_pairing.js \
+  --state-dir /var/lib/musegadget \
+  --vita-url http://VITA-IP:8768/
+```
+
+This is a local one-shot encrypted transfer, not a web login or cookie bridge;
+the official Muse pairing state must already exist on that host.
+
 ## Build the Vita application
 
 Requirements: VitaSDK, CMake, and `libvita2d`. Set `VITASDK` before configuring:
