@@ -17,7 +17,7 @@ public sealed class PairingProtocolTests
     [Fact] public void BleFramingRoundTripsAndRejectsOutOfOrderChunks()
     {
         var data = Enumerable.Range(0, 600).Select(x => (byte)x).ToArray(); var chunks = BleFraming.Encode(data, 23); var reader = new ChunkAssembler();
-        Assert.Equal(data, chunks.Select(reader.Feed).Last()); var bad = new ChunkAssembler(); Assert.Null(bad.Feed(chunks[0])); Assert.Null(bad.Feed(chunks[2]));
+        Assert.Equal(data, chunks.Select(chunk => reader.Feed(chunk)).Last()); var bad = new ChunkAssembler(); Assert.Null(bad.Feed(chunks[0])); Assert.Null(bad.Feed(chunks[2]));
     }
     [Fact] public void CommunityAppV5PublishedKeyScheduleMatches()
     {
