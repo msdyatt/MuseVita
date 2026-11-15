@@ -68,6 +68,27 @@ The official SDK state must already have been created by Meta's supported
 Gadget SDK pairing flow. The helper never scrapes Muse Web cookies, accepts a
 Muse password, or sends credentials to a public server.
 
+## Pair directly from macOS
+
+The repository now includes a native CoreBluetooth companion for macOS. It
+advertises the same Muse Gadget setup service as the published SDK, so the
+Muse phone app can perform the approved one-time pairing and return the device
+credentials. It then creates the expected `musevita-pairing.json` locally:
+
+```sh
+swift build --package-path mac/MuseVitaPair
+swift run --package-path mac/MuseVitaPair musevita-pair \
+  --vita-url http://VITA-IP:8768/ \
+  --output ./musevita-pairing.json
+```
+
+The SDK token is read from a local file, the `MUSEGADGET_SDK_TOKEN` environment
+variable, or a hidden prompt; never paste it into chat or put it in the
+command line. The tool stops advertising after provisioning and writes the
+file with owner-only permissions. This Mac flow is implemented and compile-
+tested, but physical pairing still needs to be tested with the Muse app on a
+Mac that has Bluetooth LE available.
+
 ## Optional phone transfer
 
 After the official host has produced the bundle, the Vita can transfer it

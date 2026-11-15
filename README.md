@@ -35,7 +35,7 @@ a short-lived session reference and Vita public key, never Muse credentials.
 | Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime handshake and encrypted-payload fixture passes against the pinned official SDK |
 | On-device QR pairing transfer | Implemented in the Vita build: one-time local HTTP page, QR session/key pinning, browser WebCrypto encryption; physical-phone validation pending |
 | Local QR setup page | Development-only demo remains separate from the on-device transfer |
-| Approved Meta pairing and one-time transfer | Official pairing-state import implemented; on-device BLE pairing is not |
+| Approved Meta pairing and one-time transfer | macOS CoreBluetooth companion implemented; physical Muse-app pairing remains unverified here |
 | Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
 | HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
 | WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
@@ -65,8 +65,9 @@ removes the plaintext import data.
 If using VitaShell instead of the QR flow, the helper can still create the
 legacy directory containing `identity.json`, `pairing.json`, and `sdk_token`.
 The Vita does not currently perform the BLE peripheral pairing step itself; the
-one-time BLE pairing must be completed by a supported host using the same
-identity before the bundle is made.
+the one-time BLE pairing can now be completed by the included macOS companion
+using the same identity before the bundle is made. A Linux host running Meta's
+published SDK remains supported as the reference path.
 
 When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
 with a phone on the same network. The page downloads the Vita's non-secret
@@ -94,6 +95,19 @@ node tools/send_musevita_pairing.js \
 
 This is a local one-shot encrypted transfer, not a web login or cookie bridge;
 the official Muse pairing state must already exist on that host.
+
+Alternatively, the macOS companion can perform the BLE setup itself and create
+the one-file bundle after Muse validates the returned device credentials:
+
+```sh
+swift run --package-path mac/MuseVitaPair musevita-pair \
+  --vita-url http://VITA-IP:8768/ \
+  --output ./musevita-pairing.json
+```
+
+See [docs/PAIRING.md](docs/PAIRING.md) for the SDK-token handling and Muse-app
+steps. The companion is build- and vector-tested, but has not been paired with
+a physical Muse phone in this environment.
 
 ## Build the Vita application
 

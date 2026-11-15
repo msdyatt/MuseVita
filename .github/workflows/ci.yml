@@ -20,6 +20,14 @@ jobs:
       - name: Test demo session logic
         run: python -m unittest discover -s tests -v
 
+  mac-pairing:
+    name: Test macOS pairing companion
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and test CoreBluetooth companion
+        run: swift test --package-path mac/MuseVitaPair
+
   vita-vpk:
     name: Build Vita VPK
     runs-on: ubuntu-latest
