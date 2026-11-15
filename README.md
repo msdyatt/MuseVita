@@ -109,6 +109,12 @@ See [docs/PAIRING.md](docs/PAIRING.md) for the SDK-token handling and Muse-app
 steps. The companion is build- and vector-tested, but has not been paired with
 a physical Muse phone in this environment.
 
+For the most compatible one-click pairing host, use a physical Linux machine,
+Raspberry Pi, or Ubuntu live USB with Bluetooth LE. The repository includes
+`tools/musevita-linux-pair.sh`; it installs the pinned official Linux Gadget
+SDK, seeds the Vita identity, opens the Muse phone pairing flow, creates the
+one-file bundle, and stops the Linux gadget service afterward.
+
 ## Build the Vita application
 
 Requirements: VitaSDK, CMake, and `libvita2d`. Set `VITASDK` before configuring:

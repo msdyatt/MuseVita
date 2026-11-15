@@ -17,6 +17,8 @@ jobs:
         run: npm --prefix tools ci
       - name: Compile Python sources
         run: python -m compileall -q web tests
+      - name: Check Linux pairing launcher syntax
+        run: bash -n tools/musevita-linux-pair.sh
       - name: Test demo session logic
         run: python -m unittest discover -s tests -v
 

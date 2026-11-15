@@ -116,3 +116,22 @@ download the VPK, but it cannot transparently replace the local page: browser
 mixed-content and cross-origin protections prevent a hosted page from being a
 general-purpose HTTP client for the Vita. Adding a public relay would also
 change the non-custodial security model, so it is not part of this release.
+## One-click Linux pairing disk
+
+For the most compatible BLE host, use a physical Linux machine, Raspberry Pi,
+or Ubuntu live USB with Bluetooth LE. The repository includes
+`tools/musevita-linux-pair.sh`. It pins Meta's reviewed Linux SDK revision,
+fetches the Vita identity from the local setup URL, seeds that identity before
+the official Muse pairing flow, creates `musevita-pairing.json`, stops the
+Linux gadget service, and offers to remove the Linux credential copies.
+
+Run it from a terminal or make it executable and double-click it in a Linux
+file manager:
+
+```sh
+chmod +x tools/musevita-linux-pair.sh
+./tools/musevita-linux-pair.sh
+```
+
+The token is entered through a hidden prompt. The script does not pass it on a
+command line or send it to a web service other than the official SDK flow.
