@@ -49,6 +49,12 @@ The user-facing QR carries a temporary session reference, not a Muse account tok
 
 Prefer an audited OS-native BLE helper for macOS/Windows/Linux with the official flow, no embedded SDK token, and explicit confirmation. Start by proving compatible pairing on a platform that can advertise BLE; transfer state only after successful pairing, then stop/unpair the helper locally. Distribution of such a utility must follow Meta's SDK terms.
 
+### Windows companion
+
+`windows/MuseVitaPair` is the Windows 10 1703+/Windows 11 implementation. It uses `GattServiceProvider` for the connectable setup service and local RX/TX characteristics, plus `BluetoothLEAdvertisementPublisher` for the SDK's informational `0xffff:00` manufacturer record. Its package manifest declares the Bluetooth device capability. It fetches the one-time Vita identity from `/pair/identity` only after checking the same-host `/pair` redirect, performs the pinned v5 P-256/HKDF/AES-GCM exchange, validates `provision_v2` with HTTPS `/fetch_vms`, and saves the exact one-file bundle for MuseVita.
+
+This is source-level implementation, not evidence that a Windows radio stack advertises the combined records the Muse mobile app requires. Physical Windows adapter and iPhone/Muse-app verification remains a release gate.
+
 ## Current one-time transfer design
 
 Vita generates an ephemeral receiver key pair and shows `session_id` plus the
