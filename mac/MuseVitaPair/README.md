@@ -37,3 +37,9 @@ SDK protocol and is validated against the public v5 framing/crypto vectors.
 It has not yet been paired with a physical Muse phone in this checkout. The
 Mac must have a working Bluetooth LE controller and the user must supply their
 own SDK token.
+
+If the command reports that Bluetooth is powered off or no controller is
+available, check System Settings > Bluetooth and System Settings > Privacy &
+Security > Bluetooth. `system_profiler SPBluetoothDataType` should show a
+controller; an iPhone connected by USB does not provide a Bluetooth controller
+to the Mac.

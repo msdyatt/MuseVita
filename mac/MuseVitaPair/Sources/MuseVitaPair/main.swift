@@ -169,10 +169,19 @@ final class PairingServer: NSObject, CBPeripheralManagerDelegate {
     }
 
     func peripheralManagerDidUpdateState(_ peripheral: CBPeripheralManager) {
-        guard peripheral.state == .poweredOn else {
-            if peripheral.state == .unsupported { fail("this Mac cannot advertise Bluetooth LE") }
-            if peripheral.state == .unauthorized { fail("Bluetooth permission is denied for this app") }
+        switch peripheral.state {
+        case .unsupported:
+            fail("this Mac has no Bluetooth LE peripheral support")
+        case .unauthorized:
+            fail("Bluetooth permission is denied for this app; enable it in System Settings > Privacy & Security > Bluetooth")
+        case .poweredOff:
+            fail("Bluetooth is powered off or no Bluetooth controller is available")
+        case .resetting, .unknown:
             return
+        case .poweredOn:
+            break
+        @unknown default:
+            fail("macOS reported an unknown Bluetooth state")
         }
         let service = CBMutableService(type: serviceUUID, primary: true)
         service.characteristics = [rx, tx]
@@ -187,6 +196,11 @@ final class PairingServer: NSObject, CBPeripheralManagerDelegate {
             CBAdvertisementDataManufacturerDataKey: Data([0xff, 0xff, 0x00]),
         ])
         print("Pairing is open as \(identity.bleName). In the Muse app: Settings > Devices > Developer mode > Add Device.")
+    }
+
+    func peripheralManagerDidStartAdvertising(_ peripheral: CBPeripheralManager, error: Error?) {
+        if let error { fail("macOS could not start Bluetooth advertising: \(error.localizedDescription)") }
+        print("Bluetooth advertising started. Keep this command running while the Muse app scans.")
     }
 
     func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
