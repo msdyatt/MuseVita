@@ -8,7 +8,10 @@ This USB boots Ubuntu and includes the one-click Linux pairing launcher.
 3. Connect the computer to Wi-Fi and connect a physical Bluetooth LE adapter.
 4. Launch MuseVita on the Vita and open SETUP. Keep the Vita on the same Wi-Fi.
 5. Open the MUSEVITA volume, then open the MuseVita-Pairing folder.
-6. Open a terminal in that folder and run:
+6. Double-click Install-MuseVita-Desktop-Launcher.sh and choose Run in Terminal.
+7. Double-click the new MuseVita Pairing icon on the Ubuntu desktop.
+
+If Ubuntu opens the script as text instead, open a terminal in that folder and run:
 
    chmod +x musevita-linux-pair.sh
    ./musevita-linux-pair.sh
