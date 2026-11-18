@@ -1,8 +1,9 @@
-# Architecture and protocol implementation notes
+# MuseVita architecture and protocol notes
 
 ## Target
 
 - Device: PlayStation Vita running approved homebrew ecosystem / VitaSDK app
+- Future sibling: Nintendo 3DS client named MuseDS, sharing portable protocol modules
 - Model: one-time provisioning, then **direct client**; no persistent gateway
 - Local networking: Vita Wi-Fi -> Meta Muse API/VM
 - Distribution: user-supplied SDK token; no account credential collection on our public site
@@ -12,21 +13,33 @@
 1. Initial authorization is currently BLE-based via Muse mobile application and `pairing_client_hello` / `pairing_encrypted` / `provision_v2` exchanges.
 2. Community pairing v5 includes P-256 ECDH, HKDF-SHA256 and AES-256-GCM. The SDK obtains device access/refresh credentials and VM info. SDK tokens must be user-owned.
 3. Paired gadget fetches its VM and connects to `wss://<noise_host>/v1/noise?vm_id=<id>` with a per-VM bearer; upgrade is followed by Noise XX session establishment.
-4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages and `/chat/subscribe` for live events; `/chat/history` supports history reads. See Linux SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
+4. The gadget opens `POST /link-control`, sends `link.register`, then uses `POST /chat/stream` to send messages, `GET /chat/history?limit=1` for one bounded initial item, and `/chat/subscribe` for live events. The history request is optional and bounded; live subscription remains the source of new events. See the SDK's `link_client.py`, `muse_turn.py`, and `AGENTS.md` for exact record framing and behavior.
 5. Token lifecycle includes refresh and reconnection; temporary setup hosts must shut down before Vita uses the same persistent identity to avoid concurrent active sessions.
 
 **Do not guess any cryptographic framing from this document.** Port the SDK's exact fixture-tested behavior. Inspect `linux/tests/vectors/` and `linux/tests/test_link_client.py` in the current SDK source, and validate with the real service before shipping.
 
-## Vita implementation modules (planned)
+## Vita implementation modules
 
-- `platform/vita_http`: TLS certificate validation, WebSocket client, correct time, network state
-- `protocol/noise_xx`: interoperable Noise XX, keys, transcript and test vectors
-- `protocol/link`: stream framing, register/invoke/result, reconnect
-- `protocol/chat`: send message, subscribe, parse events, history, sync
-- `storage/credentials`: local private encrypted credential storage, rotation and revoke
+- `platform/vita_http`: libcurl TLS/WebSocket client, certificate verification,
+  VM lookup, refresh, and network transport (`vita/src/muse_session.c`)
+- `protocol/noise_xx`: the initiator state machine is implemented with VitaSDK
+  mbedTLS and low-order-point rejection; cross-runtime fixture verification
+  passes against the pinned official SDK, while a real WSS peer remains
+  unverified
+- `protocol/link`: shared stream framing, register/invoke/result, HTTP-over-link
+  request encoding, and response decoding are implemented
+- `protocol/chat`: bounded initial history request, chat send, NDJSON
+  subscription, streamed event rendering, and bounded in-memory history are
+  implemented; older-page pagination remains future work
+- `vita/src/vita_media`: bounded one-shot Vita camera/JPEG and microphone/WAV
+  capture paths that send official image/file items through the shared chat
+  stream; physical capture validation remains a release gate
+- `storage/credentials`: one-time plaintext import is converted to an encrypted
+  local credential blob; hardware extraction review, revoke, and rotation remain
 - `ui`: chat, text input, pairing QR, status, notifications
 
-No such modules are falsely represented as built in the initial prototype.
+The transport entries above describe source-level implementation; live-account
+and physical-Vita validation is still a separate release gate.
 
 ## Why the QR does NOT itself authorize Muse
 
@@ -36,6 +49,14 @@ The user-facing QR carries a temporary session reference, not a Muse account tok
 
 Prefer an audited OS-native BLE helper for macOS/Windows/Linux with the official flow, no embedded SDK token, and explicit confirmation. Start by proving compatible pairing on a platform that can advertise BLE; transfer state only after successful pairing, then stop/unpair the helper locally. Distribution of such a utility must follow Meta's SDK terms.
 
-## Transfer design for future milestone
+## Current one-time transfer design
 
-Vita should generate an ephemeral receiver key pair and show `session_id` plus public key in a QR. Pairing helper verifies the session and user confirmation, encrypts only for that Vita's public key and uploads ciphertext to a short-lived relay. Vita downloads ciphertext and decrypts locally. Enforce single redemption, expiry, rate limits, origin checks, HTTPS/HSTS and no logs of secrets or ciphertext. Do not use ad hoc crypto or put an access/refresh token in a QR.
+Vita generates an ephemeral receiver key pair and shows `session_id` plus the
+public key in a QR. The phone downloads only the Vita's non-secret identity
+from the pinned local session, reads one validated `musevita-pairing.json`
+bundle produced after official pairing, encrypts the pairing state only for
+that Vita public key, and uploads ciphertext locally. Vita decrypts and
+validates it, then accepts one redemption before storing encrypted credentials.
+The session expires, the upload is single-use, and no access/refresh token or
+SDK token is placed in the QR or served by the local identity endpoint. Do not
+use ad hoc crypto or treat the QR as account authorization.

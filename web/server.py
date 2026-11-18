@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Muse Vita QR setup *demonstrator*.
+"""MuseVita QR setup *demonstrator*.
 
 The service creates short-lived, NON-AUTHENTICATED setup sessions.
 It intentionally never receives, stores, or relays Muse credentials.
@@ -148,7 +148,7 @@ class Handler(SimpleHTTPRequestHandler):
 def main():
     port = int(os.environ.get("PORT", "8777"))
     host = os.environ.get("HOST", "127.0.0.1")
-    print(f"Muse Vita onboarding prototype: http://{host}:{port}")
+    print(f"MuseVita onboarding prototype: http://{host}:{port}")
     print("Development/demo only. Does NOT pair with Muse or collect credentials.")
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 

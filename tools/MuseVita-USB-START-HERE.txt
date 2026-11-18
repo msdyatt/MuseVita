@@ -1,0 +1,28 @@
+MuseVita pairing USB
+====================
+
+This USB boots Ubuntu and includes the one-click Linux pairing launcher.
+
+1. Boot the other computer from this USB.
+2. Choose "Try Ubuntu"; do not install Ubuntu to the computer's internal disk.
+3. Connect the computer to Wi-Fi and connect a physical Bluetooth LE adapter.
+4. Launch MuseVita on the Vita and open SETUP. Keep the Vita on the same Wi-Fi.
+5. Open the MUSEVITA volume, then open the MuseVita-Pairing folder.
+6. Double-click Install-MuseVita-Desktop-Launcher.sh and choose Run in Terminal.
+7. Double-click the new MuseVita Pairing icon on the Ubuntu desktop.
+
+If Ubuntu opens the script as text instead, open a terminal in that folder and run:
+
+   chmod +x musevita-linux-pair.sh
+   ./musevita-linux-pair.sh
+
+The launcher installs Meta's official Linux Gadget SDK, asks for the SDK token
+using a hidden prompt, and pauses while you approve Add Device in the Muse app.
+It then creates musevita-pairing.json on the Linux Desktop.
+
+For the final local transfer, open the Vita setup URL in Firefox on this same
+Ubuntu session, choose musevita-pairing.json, and press SELECT on the Vita.
+The Linux computer is only needed for initial pairing and file transfer.
+
+The USB does not contain an SDK token or any personal credentials. Never save
+those values on the USB or paste them into chat.

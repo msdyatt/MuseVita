@@ -13,7 +13,41 @@ jobs:
           python-version: '3.11'
       - name: Install demo website dependencies
         run: python -m pip install -r web/requirements.txt
+      - name: Install pairing helper dependencies
+        run: npm --prefix tools ci
       - name: Compile Python sources
         run: python -m compileall -q web tests
+      - name: Check Linux pairing launcher syntax
+        run: bash -n tools/musevita-linux-pair.sh
       - name: Test demo session logic
         run: python -m unittest discover -s tests -v
+
+  vita-vpk:
+    name: Build Vita VPK
+    runs-on: ubuntu-latest
+    # Keep CI on the same supported VitaSDK release series used for the
+    # reproducible local build. The minimal image supplies the toolchain and
+    # packaging tools; the project libraries are installed explicitly below.
+    container:
+      image: vitasdk/vitasdk:2026.08-minimal
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Vita port libraries
+        # Keep the image free of the legacy OpenSSL curl package. The project
+        # uses the Vita-compatible mbedTLS-backed curl variant used locally.
+        env:
+          VDPM_NONINTERACTIVE: '1'
+        run: vdpm install libvita2d curl-mbedtls
+      - name: Configure Vita build
+        run: cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
+      - name: Build VPK
+        run: cmake --build build-vita -j2
+      - name: Verify VPK artifact
+        run: test -s build-vita/MuseVita.vpk
+      - name: Upload VPK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MuseVita-vpk
+          path: build-vita/MuseVita.vpk
+          if-no-files-found: error
+          retention-days: 14

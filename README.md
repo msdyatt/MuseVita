@@ -1,34 +1,145 @@
-# Muse Vita
+# MuseVita
 
 **Created and maintained by [Sam Dyatt](https://github.com/msdyatt).**
 
-**Repository (planned):** `https://github.com/msdyatt/muse-vita`  
-**License:** MIT · Copyright © 2026 Sam Dyatt and Muse Vita contributors
+**Repository:** `https://github.com/msdyatt/MuseVita`
+**License:** MIT · Copyright © 2026 Sam Dyatt and MuseVita contributors
 
-**An unofficial, open-source PlayStation Vita client for Meta Muse.**
+An unofficial, open-source PlayStation Vita client for Meta Muse. The planned
+Nintendo 3DS client will be called MuseDS; portable protocol code is being kept
+outside Vita-specific UI and networking so the two clients can share it.
 
-> **Status: v0.1 source prototype, not an operational Muse client.** The native Vita UI and QR-session demonstration are implemented. Pairing, credential transfer and native communication with the Muse cloud have **not** been implemented or tested. No VPK is included because VitaSDK is not available in this build environment.
+> **Status: native transport-integration milestone.** MuseVita now has a real
+> VitaSDK/CMake build, a packaged VPK, native status/setup/chat UI, encrypted
+> local credential storage, direct HTTPS VM lookup, libcurl WSS transport,
+> Noise XX, link registration, chat send, and streamed chat-event handling.
+> The authenticated path still requires a real user-owned official pairing
+> import and validation on a physical Vita before it can be called release-ready.
 
-## Goal
+## Product goal
 
-A homebrew Vita app that exchanges messages directly with the user's existing Meta Muse main chat over Wi-Fi, after a one-time approved provisioning step. No persistent Linux relay, Mac, or Raspberry Pi required for normal use. A web wizard and QR codes will streamline the one-time setup.
+After an approved one-time provisioning flow, MuseVita should connect directly
+from the Vita over Wi-Fi to the user's existing Meta Muse agent. Normal use
+must not require an always-on Mac, Raspberry Pi, Linux relay, or other bridge.
+QR onboarding remains a goal for the one-time setup; QR data must contain only
+a short-lived session reference and Vita public key, never Muse credentials.
 
-## What exists today
+## Current implementation
 
 | Component | Status |
 |---|---|
-| Native Vita homebrew UI shell (welcome/setup, controller navigation) | Source implemented; Vita toolchain build unverified |
-| VitaSDK/CMake VPK packaging configuration | Source implemented; build unverified |
-| Browser-based setup-session demonstration | Implemented, local-development only |
-| Short-lived QR codes for non-secret session URLs | Implemented |
-| Python unit tests for session lifetime | Implemented |
-| Secure end-to-end provisioning transfer | Not implemented |
-| Initial Meta-authorized BLE pairing helper | Not implemented |
-| Vita Noise XX / TLS / WebSockets / token refresh | Not implemented |
-| Actual send/receive Muse messages | Not implemented |
-| Chat history, streaming replies, voice, images | Not implemented |
+| Native Vita UI and controller navigation | Implemented and built into the VPK |
+| Vita Wi-Fi status provider | Implemented; host-mockable interface is in place |
+| VitaSDK/CMake packaging | Built with VitaSDK 2026.08 and `libvita2d` |
+| Shared control-stream framing, link wire builders, and decoders | Implemented and host-tested |
+| Noise XX initiator using VitaSDK mbedTLS | Vita-built with low-order-point rejection; cross-runtime handshake and encrypted-payload fixture passes against the pinned official SDK |
+| On-device QR pairing transfer | Implemented in the Vita build: one-time local HTTP page, QR session/key pinning, browser WebCrypto encryption; physical-phone validation pending |
+| Local QR setup page | Development-only demo remains separate from the on-device transfer |
+| Approved Meta pairing and one-time transfer | macOS CoreBluetooth companion implemented; physical Muse-app pairing remains unverified here |
+| Protected local credential storage | One-time plaintext import is converted to an encrypted local blob; extraction/revocation review remains |
+| HTTPS certificate validation and VM lookup | Implemented with libcurl verification; real-account validation pending |
+| WSS upgrade and encrypted link session | Implemented in the native source; endpoint validation pending |
+| Muse device discovery and unpair handling | Implemented: structured `device.guide`, capability metadata, and local credential retirement on `link.unpaired`/`node.unpaired`; live validation pending |
+| Native chat view, bounded history, and Vita IME composer | Implemented and connected to streamed transport events |
+| Direct chat history/send/subscribe and streamed replies | Implemented in the native source with a bounded initial history page; account/hardware validation pending |
+| Native photo and voice-note capture | Implemented as bounded Vita camera/JPEG and microphone/WAV send paths; physical capture validation pending |
+| Vita hardware installation/playability | Not tested in this environment |
 
-## Try the website
+The VPK is a build artifact, not evidence of a live Muse connection. Do not
+enter real tokens into the demo website or commit pairing state.
+
+## One-time official pairing import
+
+MuseVita does not accept a Muse password, browser cookie, or invented token. Use
+the official Gadget SDK flow on a supported BLE host to pair the Vita identity,
+then stop the host's gadget service so only one device registration is active.
+For the phone flow, run the repository helper on the supported pairing host to
+create one `musevita-pairing.json` bundle. The bundle contains the official
+pairing state and SDK token for that user-owned device; it is not a password,
+browser cookie, or public download. The Vita's QR page downloads the Vita's
+non-secret identity automatically, so the phone only needs that one bundle.
+The phone encrypts it locally before transfer. On receipt MuseVita imports the
+official access and refresh tokens plus SDK token into `credentials.bin` and
+removes the plaintext import data.
+
+If using VitaShell instead of the QR flow, the helper can still create the
+legacy directory containing `identity.json`, `pairing.json`, and `sdk_token`.
+The Vita does not currently perform the BLE peripheral pairing step itself; the
+the one-time BLE pairing can now be completed by the included macOS companion
+using the same identity before the bundle is made. A Linux host running Meta's
+published SDK remains supported as the reference path.
+
+When the Vita is on Wi-Fi, the SETUP page displays a one-time QR code. Scan it
+with a phone on the same network. The page downloads the Vita's non-secret
+identity automatically, so the phone needs only one validated
+`musevita-pairing.json` bundle from the official SDK; press SELECT on the Vita
+when it is ready. The QR contains only a local URL, an expiring session
+reference, and the Vita's ephemeral P-256 public key. The phone encrypts the
+bundle with browser WebCrypto when available, or the bundled pure-JavaScript
+fallback, using ECDH/HKDF-SHA-256/AES-256-GCM; the Vita decrypts and validates
+it locally, then immediately converts it to encrypted app storage. The local
+URL never serves the pairing credentials or SDK token.
+The local transfer server stops accepting uploads after the first successful
+bundle. This path is source-tested and cross-compiled, but still needs a
+physical phone/Vita transfer test before release claims.
+
+For a no-file setup, the supported pairing host can send its already-created
+official SDK state directly to the Vita:
+
+```sh
+npm --prefix tools install
+node tools/send_musevita_pairing.js \
+  --state-dir /var/lib/musegadget \
+  --vita-url http://VITA-IP:8768/
+```
+
+This is a local one-shot encrypted transfer, not a web login or cookie bridge;
+the official Muse pairing state must already exist on that host.
+
+Alternatively, the macOS companion can perform the BLE setup itself and create
+the one-file bundle after Muse validates the returned device credentials:
+
+```sh
+swift run --package-path mac/MuseVitaPair musevita-pair \
+  --vita-url http://VITA-IP:8768/ \
+  --output ./musevita-pairing.json
+```
+
+See [docs/PAIRING.md](docs/PAIRING.md) for the SDK-token handling and Muse-app
+steps. The companion is build- and vector-tested, but has not been paired with
+a physical Muse phone in this environment.
+
+For the most compatible one-click pairing host, use a physical Linux machine,
+Raspberry Pi, or Ubuntu live USB with Bluetooth LE. The repository includes
+`tools/musevita-linux-pair.sh`; it installs the pinned official Linux Gadget
+SDK, seeds the Vita identity, opens the Muse phone pairing flow, creates the
+one-file bundle, and stops the Linux gadget service afterward.
+
+## Build the Vita application
+
+Requirements: VitaSDK, CMake, and `libvita2d`. Set `VITASDK` before configuring:
+
+```sh
+export VITASDK=/path/to/vitasdk
+export PATH="$VITASDK/bin:$PATH"
+cmake -S vita -B build-vita -DCMAKE_BUILD_TYPE=Release
+cmake --build build-vita -j
+```
+
+The output is `build-vita/MuseVita.vpk`. Transfer it with VitaShell and install
+only on a homebrew-capable PS Vita. Hardware installation and interaction still
+need to be verified and recorded separately.
+
+## Host tests
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+The C framing harness checks the official SDK's little-endian uint32 length
+prefix, fragmented input, JSON payload delivery, and zero-length keepalives.
+
+## Local QR demo
 
 Requirements: Python 3.10+ and `pip`.
 
@@ -37,70 +148,38 @@ python3 -m pip install -r web/requirements.txt
 python3 web/server.py
 ```
 
-Visit <http://localhost:8777>. Click **Create demo QR session**. The generated QR opens the *same demo site* and shows a ten-minute session code. It does not pair a Vita.
+Visit <http://localhost:8777> and create a demo QR session. It does not pair a
+Vita, contact Muse, mint credentials, or establish a secure transfer. For LAN
+testing, bind only to a trusted network and use the `MUSE_VITA_PUBLIC_URL`
+setting described in the server help; this development server has no
+production TLS, authentication, rate limiting, or persistence.
 
-For local network testing, use `HOST=0.0.0.0 PORT=8777 MUSE_VITA_PUBLIC_URL=http://YOUR_COMPUTER_IP:8777 python3 web/server.py` on a **trusted LAN only**. This development server has no production TLS, authentication, rate limiting, or persistence.
+## Direct protocol plan
 
-Run tests:
+The port must follow the official Meta Muse Gadget SDK at a pinned upstream
+commit, currently reviewed at `f2c702b123e97f4fecdaefb29ded17bb03fab0b0`:
 
-```sh
-python3 -m unittest discover -s tests -v
-```
+1. Use the approved Muse mobile pairing procedure and persist a stable Vita
+   identity. QR onboarding may coordinate the one-time transfer but cannot
+   replace BLE or account authorization.
+2. Fetch the leased VM with the user-owned device access credential over
+   certificate-validated HTTPS.
+3. Open `wss://<noise_host>/v1/noise?vm_id=<id>` with the VM bearer, integrate
+   the implemented exact Noise XX initiator, and verify it against SDK vectors
+   while rejecting malformed/low-order inputs.
+4. Send the protobuf service envelope over `/link-control`, register the Vita
+   as a gadget, then use `/chat/history` for a bounded initial transcript,
+   `/chat/stream` for text turns, and `/chat/subscribe` for NDJSON events.
+   Never keep a second live control session for the same identity.
 
-## Build the Vita shell
+The implementation must be fixture-tested before any real credential is used.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and
+[docs/SECURITY.md](docs/SECURITY.md) for the security boundary and pending
+work. See [docs/PAIRING.md](docs/PAIRING.md) for the one-time supported
+pairing workflow. No Meta or Sony affiliation is claimed.
 
-See [vita/README.md](vita/README.md) for VitaSDK prerequisites and installation. Build with `cmake -S vita -B build-vita` after setting `VITASDK`. Requires `vita2d` in the SDK. Use the resulting VPK only on a homebrew-capable PS Vita.
+## Publishing
 
-## Roadmap / acceptance criteria
-
-### Milestone 1: Native app runs
-
-- Vita renders a functional UI, supports gamepad controls, closes safely.
-- Verify a VPK builds with VitaSDK and installs through VitaShell.
-- No network secrets, debug passwords or SDK tokens are embedded.
-
-### Milestone 2: Direct transport
-
-- Implement HTTPS/TLS verification with certificate bundle and correct Vita system clock handling.
-- Implement WSS and the SDK's Noise XX session with interoperable test vectors.
-- Implement VM discovery, device registration, refresh-token rotation and reconnect/retry behavior.
-- Send one main-chat message and subscribe to the streamed response **from the Vita directly**, with no server in the middle.
-
-### Milestone 3: One-time authorization and QR onboarding
-
-- Provision via an approved Muse Gadget pairing process (currently documented as BLE through Meta's mobile app).
-- Pair **the Vita's persistent identity** on another machine and transfer credentials once, as documented for Bluetooth-less devices.
-- Build an ephemeral end-to-end encrypted credential transfer that binds to a Vita-generated public key, with short TTL, one-time redemption, explicit consent, no credential logging and no plaintext server copies.
-- Web-hosted QR wizard displays status and instructions; no permanent relay needed after setup.
-
-### Milestone 4: Polished chat client
-
-- Text entry via Vita IME, history paging, follow-up conversations, streaming responses, agent status and reconnect.
-- Add optional microphone, images and settings after core text chat works reliably.
-
-## SDK references
-
-- [Muse Gadget SDK](https://github.com/facebookincubator/muse-gadget-sdk)
-- [Linux SDK pairing and chat protocol](https://github.com/facebookincubator/muse-gadget-sdk/blob/main/linux/AGENTS.md)
-- [Linux SDK README](https://github.com/facebookincubator/muse-gadget-sdk/blob/main/linux/README.md)
-- [Headless/no-BLE pairing transfer example](https://github.com/facebookincubator/muse-gadget-sdk/blob/main/linux/docs/raspberry-pi-2-headless.md)
-- [Gadget device identity/guide protocol](https://github.com/facebookincubator/muse-gadget-sdk/blob/main/protocols/DEVICE.md)
-- [VitaSDK and installation](https://vitasdk.org/)
-
-## Third-party platform and trademarks
-
-This project is not affiliated with Meta or Sony. Meta's software SDK is Apache-2.0, but its Gadget SDK token usage and distribution terms are separate. Public releases must not bundle developer SDK tokens or personal account credentials, and the distribution model needs an up-to-date review of [Gadget SDK Terms](https://gadgets.muse.ai/sdk-terms).
-
-The code in this package is MIT licensed; no Meta SDK source or bundled proprietary fonts/assets are redistributed.
-
-
-## Developing with Codex
-
-[AGENTS.md](AGENTS.md) describes project constraints, commands, and acceptance
-criteria for coding agents. [CODEX_START_HERE.md](CODEX_START_HERE.md) is the
-first-task brief. Keep the scaffold's implemented/unimplemented claims truthful.
-
-## Publishing to GitHub
-
-See [PUBLISHING.md](PUBLISHING.md) for the initial one-time repository creation
-and push workflow. **This source package is not already published on GitHub.**
+See [PUBLISHING.md](PUBLISHING.md) for the initial GitHub repository and pull
+request workflow. Public releases must not bundle SDK tokens, access/refresh
+tokens, or personal pairing state.
