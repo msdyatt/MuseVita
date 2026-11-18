@@ -170,16 +170,22 @@ read_sdk_token() {
 }
 
 fetch_vita_identity() {
-    local redirect sid identity_url
+    local redirect sid identity_url headers
     WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/musevita-pair.XXXXXX")"
-    redirect="$(curl --silent --show-error --max-time 15 --max-redirs 0 \
-        --output /dev/null --write-out '%{redirect_url}' "$VITA_URL" 2>/dev/null || true)"
-    [ -n "$redirect" ] || die "Vita setup URL did not return a one-time pairing redirect"
-    read -r sid < <(python3 - "$VITA_URL" "$redirect" <<'PY'
+    headers="$WORK_DIR/setup.headers"
+    curl --silent --show-error --max-time 15 --dump-header "$headers" \
+        --output /dev/null "$VITA_URL" ||
+        die "Vita setup URL could not be reached; check Wi-Fi and the Vita IP"
+    read -r sid < <(python3 - "$VITA_URL" "$headers" <<'PY'
 import sys
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urljoin, urlparse
 base = urlparse(sys.argv[1])
-pair = urlparse(sys.argv[2])
+headers = open(sys.argv[2], encoding="ascii", errors="replace").read().splitlines()
+locations = [line.split(":", 1)[1].strip() for line in headers
+             if line.lower().startswith("location:") and ":" in line]
+if not locations:
+    raise SystemExit("Vita setup URL did not return a one-time pairing redirect")
+pair = urlparse(urljoin(sys.argv[1], locations[-1]))
 if pair.scheme != "http" or pair.netloc != base.netloc or pair.path != "/pair":
     raise SystemExit("Vita redirect was not a local /pair session")
 sid = parse_qs(pair.query).get("s", [""])[0]
