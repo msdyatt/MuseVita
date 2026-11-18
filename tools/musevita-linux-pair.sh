@@ -89,9 +89,18 @@ parse_args() {
 check_prerequisites() {
     [ "$(uname -s)" = Linux ] || die "This launcher must run on Linux."
     [ "$(id -u)" -ne 0 ] || die "Run as your normal desktop user; sudo is used where needed."
-    for command in curl python3 sudo; do
+    for command in python3 sudo; do
         command -v "$command" >/dev/null 2>&1 || die "missing required command: $command"
     done
+    if ! command -v curl >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1; then
+            say "curl is missing; installing it for this Ubuntu session."
+            as_root apt-get update
+            as_root apt-get install -y curl
+        else
+            die "missing required command: curl; install curl with your Linux package manager"
+        fi
+    fi
     if [ ! -d /sys/class/bluetooth ] ||
        [ -z "$(find /sys/class/bluetooth -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then
         die "no Bluetooth adapter is visible to Linux"
